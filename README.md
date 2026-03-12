@@ -57,3 +57,5 @@ O foco do projeto está no desenvolvimento da arquitetura de software, integraç
 João Vitor Roventini - 22005168
 Luiz Antonio Polydoro Coutinho - 24025981
 Tomás Cubeiro - 24023817
+João Pedro Galo de Souza - 22017668
+
