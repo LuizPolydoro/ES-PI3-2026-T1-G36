@@ -54,5 +54,6 @@ O foco do projeto está no desenvolvimento da arquitetura de software, integraç
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 # Integrantes do Grupo:
-Luiz Antonio Polydoro Coutinho - 24025981
 João Vitor Roventini - 22005168
+Luiz Antonio Polydoro Coutinho - 24025981
+Tomás Cubeiro - 24023817
