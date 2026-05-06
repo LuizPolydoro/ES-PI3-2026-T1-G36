@@ -1,10 +1,15 @@
 // lib/screens/startup_detail_screen.dart
-// Detalhe completo de uma Startup — Versão com redirecionamento para o YouTube
+// Autor: [Seu Nome Completo]
+// RA: [Seu RA]
+// Detalhe completo de uma Startup — YouTube + Sumário Executivo + Q&A real + Compra/Venda
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/startup_model.dart';
+import '../services/wallet_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/gradient_button.dart';
 
@@ -17,33 +22,104 @@ class StartupDetailScreen extends StatefulWidget {
 }
 
 class _StartupDetailScreenState extends State<StartupDetailScreen> {
-  // Função para abrir o link do YouTube externamente
+  final _perguntaCtrl  = TextEditingController();
+  final _walletService = WalletService();
+  bool _enviandoPergunta = false;
+
+  @override
+  void dispose() {
+    _perguntaCtrl.dispose();
+    super.dispose();
+  }
+
+  // ── Abre YouTube ────────────────────────────────────────────────────────────
   Future<void> _abrirYoutube() async {
     final urlStr = widget.startup.videoDemo.trim();
     if (urlStr.isEmpty) return;
-
-    final Uri url = Uri.parse(urlStr);
-
+    final uri = Uri.parse(urlStr);
     try {
-      // No Android 11+, precisamos tentar o modo inAppBrowserView primeiro
-      // ou externalNonBrowserApplication para que o sistema encontre o app do YouTube
-      final sucesso = await launchUrl(
-        url,
-        mode: LaunchMode.externalApplication,
-      );
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok) throw 'Não foi possível abrir.';
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Erro ao abrir o vídeo. Verifique o link.'),
+        backgroundColor: AppTheme.error,
+      ));
+    }
+  }
 
-      if (!sucesso) {
-        throw 'O sistema não conseguiu abrir o link.';
+  // ── Envia pergunta ao Firestore ─────────────────────────────────────────────
+  Future<void> _enviarPergunta() async {
+    final texto = _perguntaCtrl.text.trim();
+    if (texto.isEmpty) return;
+    setState(() => _enviandoPergunta = true);
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+      await FirebaseFirestore.instance
+          .collection('startups')
+          .doc(widget.startup.id)
+          .collection('perguntas')
+          .add({
+        'uid':      uid,
+        'pergunta': texto,
+        'resposta': '',
+        'data':     FieldValue.serverTimestamp(),
+        'publica':  true,
+      });
+      _perguntaCtrl.clear();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Pergunta enviada ao empreendedor!'),
+          backgroundColor: AppTheme.surfaceLight,
+        ));
       }
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro ao abrir o vídeo. Verifique se o link está correto.'),
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Erro ao enviar: $e'),
           backgroundColor: AppTheme.error,
-        ),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _enviandoPergunta = false);
+    }
+  }
+
+  // ── Compra/Venda real via WalletService ─────────────────────────────────────
+  Future<void> _processarNegociacao(String tipo, int quantidade) async {
+    final s = widget.startup;
+    WalletResult result;
+
+    if (tipo == 'comprar') {
+      result = await _walletService.comprarTokens(
+        startupId:       s.id,
+        nomeStartup:     s.nomeStartup,
+        quantidade:      quantidade,
+        capitalAportado: s.capitalAportado,
+        tokensEmitidos:  s.tokensEmitidos,
+      );
+    } else {
+      result = await _walletService.venderTokens(
+        startupId:       s.id,
+        nomeStartup:     s.nomeStartup,
+        quantidade:      quantidade,
+        capitalAportado: s.capitalAportado,
+        tokensEmitidos:  s.tokensEmitidos,
       );
     }
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(result.success
+          ? tipo == 'comprar'
+              ? '✅ Compra de $quantidade tokens realizada!'
+              : '✅ Venda de $quantidade tokens realizada!'
+          : '❌ ${result.errorMessage}'),
+      backgroundColor:
+          result.success ? AppTheme.surfaceLight : AppTheme.error,
+    ));
   }
 
   @override
@@ -56,7 +132,7 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              // AppBar
+              // ── AppBar ────────────────────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 8, 20, 4),
                 child: Row(
@@ -90,17 +166,28 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
                       _buildMetrics(s),
                       const SizedBox(height: 20),
 
-                      // Botão de Vídeo / Pitch
+                      // ── Botão YouTube ─────────────────────────────────────
                       if (s.videoDemo.isNotEmpty) ...[
                         _buildVideoButton(),
                         const SizedBox(height: 20),
                       ],
 
+                      // ── Sumário Executivo ─────────────────────────────────
+                      if (s.sumarioExecutivo.isNotEmpty) ...[
+                        _buildSumario(s),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // ── Descrição ─────────────────────────────────────────
                       _buildInfoSection(
                           'Descrição', s.descricao, Icons.info_outline),
                       const SizedBox(height: 16),
+
+                      // ── Estrutura Societária ──────────────────────────────
                       _buildSocietaria(s),
                       const SizedBox(height: 16),
+
+                      // ── Mentores / Conselho ───────────────────────────────
                       if (s.mentoresConselho.isNotEmpty) ...[
                         _buildInfoSection(
                           'Mentores / Conselho',
@@ -109,8 +196,12 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
                         ),
                         const SizedBox(height: 16),
                       ],
+
+                      // ── Q&A ───────────────────────────────────────────────
                       _buildQnA(s),
                       const SizedBox(height: 16),
+
+                      // ── Balcão de Tokens ──────────────────────────────────
                       _buildNegociacao(s),
                       const SizedBox(height: 24),
                     ],
@@ -124,12 +215,74 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
     );
   }
 
-  // ── Botão Assistir no YouTube ─────────────────────────────────────────────
+  // ── Sumário Executivo ───────────────────────────────────────────────────────
+  Widget _buildSumario(StartupModel s) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          const Icon(Icons.description_outlined,
+              color: AppTheme.primary, size: 16),
+          const SizedBox(width: 8),
+          Text('Sumário Executivo',
+              style: GoogleFonts.spaceGrotesk(
+                  color: AppTheme.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700)),
+        ]),
+        const SizedBox(height: 10),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Badge "Documento público"
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.lock_open_outlined,
+                        color: AppTheme.primary, size: 11),
+                    const SizedBox(width: 4),
+                    Text('Documento público',
+                        style: const TextStyle(
+                            color: AppTheme.primary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(s.sumarioExecutivo,
+                  style: const TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 13,
+                      height: 1.7)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Botão YouTube ───────────────────────────────────────────────────────────
   Widget _buildVideoButton() {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: const Color(0xFFCD201F).withOpacity(0.1), // Cor oficial do YouTube (suave)
+        color: const Color(0xFFCD201F).withOpacity(0.1),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFCD201F).withOpacity(0.3)),
       ),
@@ -163,7 +316,7 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
     );
   }
 
-  // ── Header ─────────────────────────────────────────────────────────────────
+  // ── Header ──────────────────────────────────────────────────────────────────
   Widget _buildHeader(StartupModel s) {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -175,15 +328,16 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
       child: Row(
         children: [
           Container(
-            width: 62,
-            height: 62,
+            width: 62, height: 62,
             decoration: BoxDecoration(
               gradient: AppTheme.primaryGradient,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Center(
               child: Text(
-                s.nomeStartup.isNotEmpty ? s.nomeStartup[0].toUpperCase() : '?',
+                s.nomeStartup.isNotEmpty
+                    ? s.nomeStartup[0].toUpperCase()
+                    : '?',
                 style: GoogleFonts.spaceGrotesk(
                     color: AppTheme.background,
                     fontSize: 26,
@@ -215,20 +369,18 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
     );
   }
 
-  // ── Métricas ───────────────────────────────────────────────────────────────
+  // ── Métricas ────────────────────────────────────────────────────────────────
   Widget _buildMetrics(StartupModel s) {
     return Row(
       children: [
-        Expanded(
-            child: _metricCard(
+        Expanded(child: _metricCard(
           Icons.account_balance_wallet_outlined,
           'Capital Aportado',
           s.capitalFormatado,
           AppTheme.primary,
         )),
         const SizedBox(width: 12),
-        Expanded(
-            child: _metricCard(
+        Expanded(child: _metricCard(
           Icons.token_outlined,
           'Tokens Emitidos',
           s.tokensFormatado,
@@ -258,7 +410,8 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
                   fontWeight: FontWeight.w700)),
           const SizedBox(height: 2),
           Text(label,
-              style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+              style: const TextStyle(
+                  color: AppTheme.textMuted, fontSize: 11)),
         ],
       ),
     );
@@ -289,23 +442,32 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
           ),
           child: Text(content,
               style: const TextStyle(
-                  color: AppTheme.textSecondary, fontSize: 13, height: 1.6)),
+                  color: AppTheme.textSecondary,
+                  fontSize: 13,
+                  height: 1.6)),
         ),
       ],
     );
   }
 
-  // ── Estrutura societária ───────────────────────────────────────────────────
+  // ── Estrutura Societária ────────────────────────────────────────────────────
   Widget _buildSocietaria(StartupModel s) {
-    final sociosList = s.socios.split(';').map((e) => e.trim()).toList();
-    final participacoes =
-        s.participacaoSocietaria.split(';').map((e) => e.trim()).toList();
+    final sociosList = s.socios
+        .split(';')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    final participacoes = s.participacaoSocietaria
+        .split(';')
+        .map((e) => e.trim())
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(children: [
-          const Icon(Icons.people_outline, color: AppTheme.accent, size: 16),
+          const Icon(Icons.people_outline,
+              color: AppTheme.accent, size: 16),
           const SizedBox(width: 8),
           Text('Estrutura Societária',
               style: GoogleFonts.spaceGrotesk(
@@ -327,13 +489,12 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
               final participacao =
                   i < participacoes.length ? participacoes[i] : '';
               return Padding(
-                padding:
-                    EdgeInsets.only(bottom: i < sociosList.length - 1 ? 10 : 0),
+                padding: EdgeInsets.only(
+                    bottom: i < sociosList.length - 1 ? 12 : 0),
                 child: Row(
                   children: [
                     Container(
-                      width: 34,
-                      height: 34,
+                      width: 36, height: 36,
                       decoration: const BoxDecoration(
                         gradient: AppTheme.primaryGradient,
                         shape: BoxShape.circle,
@@ -345,7 +506,7 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
                               : '?',
                           style: GoogleFonts.spaceGrotesk(
                               color: AppTheme.background,
-                              fontSize: 13,
+                              fontSize: 14,
                               fontWeight: FontWeight.w700),
                         ),
                       ),
@@ -382,133 +543,204 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
     );
   }
 
-  // ── Q&A ───────────────────────────────────────────────────────────────────
+  // ── Q&A — dados reais do Firestore ──────────────────────────────────────────
   Widget _buildQnA(StartupModel s) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Row(children: [
+          const Icon(Icons.chat_bubble_outline,
+              color: AppTheme.accent, size: 16),
+          const SizedBox(width: 8),
+          Text('Perguntas & Respostas',
+              style: GoogleFonts.spaceGrotesk(
+                  color: AppTheme.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700)),
+        ]),
+        const SizedBox(height: 12),
+
+        // Campo de envio
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(children: [
-              const Icon(Icons.chat_bubble_outline,
-                  color: AppTheme.accent, size: 16),
-              const SizedBox(width: 8),
-              Text('Perguntas & Respostas',
-                  style: GoogleFonts.spaceGrotesk(
-                      color: AppTheme.textPrimary,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700)),
-            ]),
-            TextButton.icon(
-              onPressed: _showPergunta,
-              icon: const Icon(Icons.add, size: 14),
-              label: const Text('Perguntar', style: TextStyle(fontSize: 11)),
-              style: TextButton.styleFrom(
-                foregroundColor: AppTheme.primary,
-                backgroundColor: AppTheme.primary.withOpacity(0.08),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
+            Expanded(
+              child: TextField(
+                controller: _perguntaCtrl,
+                style: const TextStyle(
+                    color: AppTheme.textPrimary, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Envie uma pergunta ao empreendedor...',
+                  hintStyle: const TextStyle(
+                      color: AppTheme.textMuted, fontSize: 13),
+                  filled: true,
+                  fillColor: AppTheme.surfaceLight,
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: _enviandoPergunta ? null : _enviarPergunta,
+              child: Container(
+                padding: const EdgeInsets.all(11),
+                decoration: BoxDecoration(
+                  gradient: AppTheme.primaryGradient,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: _enviandoPergunta
+                    ? const SizedBox(
+                        width: 18, height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppTheme.background))
+                    : const Icon(Icons.send_rounded,
+                        color: AppTheme.background, size: 18),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 10),
-        _qnaItem(
-          'Qual o modelo de receita?',
-          'Modelo SaaS com planos mensais e anuais, além de receita por transação para funcionalidades premium.',
-        ),
-        const SizedBox(height: 8),
-        _qnaItem(
-          'A startup tem clientes pagantes?',
-          'Sim! Temos usuários ativos e contratos B2B em fase de negociação.',
+
+        const SizedBox(height: 14),
+
+        // Lista do Firestore em tempo real
+        StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('startups')
+              .doc(s.id)
+              .collection('perguntas')
+              .where('publica', isEqualTo: true)
+              .orderBy('data', descending: true)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: CircularProgressIndicator(
+                      color: AppTheme.primary, strokeWidth: 2),
+                ),
+              );
+            }
+
+            final docs = snapshot.data?.docs ?? [];
+
+            if (docs.isEmpty) {
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppTheme.surfaceLight),
+                ),
+                child: const Center(
+                  child: Text(
+                    'Nenhuma pergunta ainda.\nSeja o primeiro a perguntar!',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: AppTheme.textMuted,
+                        fontSize: 13,
+                        height: 1.5),
+                  ),
+                ),
+              );
+            }
+
+            return Column(
+              children: docs.map((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                final pergunta = data['pergunta'] as String? ?? '';
+                final resposta = data['resposta'] as String? ?? '';
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _qnaItem(pergunta, resposta),
+                );
+              }).toList(),
+            );
+          },
         ),
       ],
     );
   }
 
   Widget _qnaItem(String pergunta, String resposta) {
+    final temResposta = resposta.isNotEmpty;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.surfaceLight),
+        border: Border.all(
+          color: temResposta
+              ? AppTheme.primary.withOpacity(0.2)
+              : AppTheme.surfaceLight,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            const Icon(Icons.help_outline, color: AppTheme.accent, size: 13),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Icon(Icons.help_outline,
+                color: AppTheme.accent, size: 13),
             const SizedBox(width: 6),
             Expanded(
               child: Text(pergunta,
                   style: const TextStyle(
                       color: AppTheme.textPrimary,
                       fontSize: 13,
-                      fontWeight: FontWeight.w500)),
+                      fontWeight: FontWeight.w500,
+                      height: 1.4)),
             ),
           ]),
-          const SizedBox(height: 8),
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Icon(Icons.chat_bubble_outline,
-                color: AppTheme.primary, size: 13),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(resposta,
-                  style: const TextStyle(
-                      color: AppTheme.textSecondary,
-                      fontSize: 12,
-                      height: 1.5)),
+          if (temResposta) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: AppTheme.primary.withOpacity(0.15)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.check_circle_outline,
+                      color: AppTheme.primary, size: 13),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(resposta,
+                        style: const TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontSize: 12,
+                            height: 1.5)),
+                  ),
+                ],
+              ),
             ),
-          ]),
+          ] else ...[
+            const SizedBox(height: 6),
+            const Text('Aguardando resposta...',
+                style: TextStyle(
+                    color: AppTheme.textMuted,
+                    fontSize: 11,
+                    fontStyle: FontStyle.italic)),
+          ],
         ],
       ),
     );
   }
 
-  void _showPergunta() {
-    final ctrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppTheme.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Fazer Pergunta',
-            style: TextStyle(color: AppTheme.textPrimary)),
-        content: TextField(
-          controller: ctrl,
-          style: const TextStyle(color: AppTheme.textPrimary),
-          maxLines: 3,
-          decoration: const InputDecoration(
-            hintText: 'Escreva sua pergunta...',
-            hintStyle: TextStyle(color: AppTheme.textMuted),
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar',
-                  style: TextStyle(color: AppTheme.textSecondary))),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('Pergunta enviada!'),
-                backgroundColor: AppTheme.surfaceLight,
-              ));
-            },
-            child: const Text('Enviar'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Negociação de tokens ───────────────────────────────────────────────────
+  // ── Balcão de tokens ────────────────────────────────────────────────────────
   Widget _buildNegociacao(StartupModel s) {
+    final precoUnitario = s.tokensEmitidos > 0
+        ? s.capitalAportado / s.tokensEmitidos
+        : 0.0;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -524,20 +756,26 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            const Icon(Icons.token_outlined, color: AppTheme.gold, size: 18),
+            const Icon(Icons.token_outlined,
+                color: AppTheme.gold, size: 18),
             const SizedBox(width: 8),
-            Text('Negociação de Tokens',
+            Text('Balcão de Tokens',
                 style: GoogleFonts.spaceGrotesk(
                     color: AppTheme.textPrimary,
                     fontSize: 15,
                     fontWeight: FontWeight.w700)),
           ]),
           const SizedBox(height: 6),
-          const Text(
-            'Adquira ou venda tokens representativos de participação nesta startup.',
-            style: TextStyle(
-                color: AppTheme.textSecondary, fontSize: 12, height: 1.4),
-          ),
+          Row(children: [
+            const Icon(Icons.monetization_on_outlined,
+                color: AppTheme.primary, size: 13),
+            const SizedBox(width: 6),
+            Text(
+              'Preço atual: R\$ ${precoUnitario.toStringAsFixed(4)}/token',
+              style: const TextStyle(
+                  color: AppTheme.textSecondary, fontSize: 12),
+            ),
+          ]),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -564,7 +802,8 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
                     icon: const Icon(Icons.remove_rounded, size: 16),
                     label: Text('Vender',
                         style: GoogleFonts.dmSans(
-                            fontWeight: FontWeight.w700, fontSize: 13)),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13)),
                   ),
                 ),
               ),
@@ -579,62 +818,109 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
     final ctrl = TextEditingController();
     final isCompra = tipo == 'comprar';
     final color = isCompra ? AppTheme.primary : AppTheme.gold;
+    final s = widget.startup;
+    final preco = s.tokensEmitidos > 0
+        ? s.capitalAportado / s.tokensEmitidos
+        : 0.0;
 
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppTheme.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          isCompra ? 'Comprar Tokens' : 'Vender Tokens',
-          style: TextStyle(color: color),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Quantidade de tokens de ${widget.startup.nomeStartup}:',
-              style: const TextStyle(
-                  color: AppTheme.textSecondary, fontSize: 13),
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setModalState) {
+          final qtd = int.tryParse(ctrl.text) ?? 0;
+          final total = qtd * preco;
+
+          return AlertDialog(
+            backgroundColor: AppTheme.surface,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20)),
+            title: Row(children: [
+              Icon(isCompra
+                  ? Icons.add_circle_outline
+                  : Icons.remove_circle_outline,
+                  color: color, size: 20),
+              const SizedBox(width: 8),
+              Text(isCompra ? 'Comprar Tokens' : 'Vender Tokens',
+                  style: TextStyle(color: color, fontSize: 16)),
+            ]),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Startup: ${s.nomeStartup}',
+                    style: const TextStyle(
+                        color: AppTheme.textSecondary, fontSize: 12)),
+                Text(
+                  'Preço: R\$ ${preco.toStringAsFixed(4)}/token',
+                  style: const TextStyle(
+                      color: AppTheme.textSecondary, fontSize: 12),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: ctrl,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(color: AppTheme.textPrimary),
+                  onChanged: (_) => setModalState(() {}),
+                  decoration: const InputDecoration(
+                    labelText: 'Quantidade de tokens',
+                    suffixText: 'tokens',
+                    suffixStyle:
+                        TextStyle(color: AppTheme.textSecondary),
+                  ),
+                ),
+                if (qtd > 0) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Total:',
+                            style: TextStyle(
+                                color: color, fontSize: 13)),
+                        Text(
+                          'R\$ ${total.toStringAsFixed(2)}',
+                          style: TextStyle(
+                              color: color,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
             ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: ctrl,
-              keyboardType: TextInputType.number,
-              style: const TextStyle(color: AppTheme.textPrimary),
-              decoration: const InputDecoration(
-                hintText: 'Ex: 100',
-                hintStyle: TextStyle(color: AppTheme.textMuted),
-                suffixText: 'tokens',
-                suffixStyle: TextStyle(color: AppTheme.textSecondary),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancelar',
+                    style: TextStyle(color: AppTheme.textSecondary)),
               ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar',
-                  style: TextStyle(color: AppTheme.textSecondary))),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text(isCompra
-                    ? 'Oferta de compra registrada!'
-                    : 'Oferta de venda registrada!'),
-                backgroundColor: AppTheme.surfaceLight,
-              ));
-            },
-            child: Text(isCompra ? 'Comprar' : 'Vender',
-                style: TextStyle(color: color)),
-          ),
-        ],
+              TextButton(
+                onPressed: qtd <= 0
+                    ? null
+                    : () {
+                        Navigator.pop(ctx);
+                        _processarNegociacao(tipo, qtd);
+                      },
+                child: Text(
+                    isCompra ? 'Confirmar Compra' : 'Confirmar Venda',
+                    style: TextStyle(
+                        color: qtd > 0 ? color : AppTheme.textMuted)),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
+  // ── Helpers ─────────────────────────────────────────────────────────────────
   Widget _badge(String label, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -652,13 +938,10 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
   Color _estagioColor(StartupModel s) {
     switch (s.estagio.toLowerCase()) {
       case 'expansao':
-      case 'em_expansao':
-        return AppTheme.gold;
+      case 'em_expansao': return AppTheme.gold;
       case 'operacao':
-      case 'em_operacao':
-        return AppTheme.primary;
-      default:
-        return AppTheme.accent;
+      case 'em_operacao': return AppTheme.primary;
+      default:            return AppTheme.accent;
     }
   }
 }

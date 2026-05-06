@@ -9,6 +9,7 @@ class StartupModel {
   final String id;
   final String nomeStartup;
   final String descricao;
+  final String sumarioExecutivo; // ← campo novo
   final String estagio;
   final String setor;
   final double capitalAportado;
@@ -23,6 +24,7 @@ class StartupModel {
     required this.id,
     required this.nomeStartup,
     required this.descricao,
+    required this.sumarioExecutivo,
     required this.estagio,
     required this.setor,
     required this.capitalAportado,
@@ -37,18 +39,19 @@ class StartupModel {
   factory StartupModel.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
     return StartupModel(
-      id:                    doc.id,
-      nomeStartup:           d['nome_startup']            ?? '',
-      descricao:             d['descricao']               ?? '',
-      estagio:               d['estagio']                 ?? '',
-      setor:                 d['setor']                   ?? '',
-      capitalAportado:       (d['capital_aportado'] ?? 0).toDouble(),
-      tokensEmitidos:        (d['tokens_emitidos']  ?? 0).toInt(),
-      status:                d['status']                  ?? '',
-      socios:                d['socios']                  ?? '',
-      participacaoSocietaria:d['participacao_societaria'] ?? '',
-      mentoresConselho:      d['mentores_conselho']        ?? '',
-      videoDemo:             d['video_demo']               ?? '',
+      id:                     doc.id,
+      nomeStartup:            d['nome_startup']             ?? '',
+      descricao:              d['descricao']                ?? '',
+      sumarioExecutivo:       d['sumario_executivo']        ?? '',
+      estagio:                d['estagio']                  ?? '',
+      setor:                  d['setor']                    ?? '',
+      capitalAportado:        (d['capital_aportado'] ?? 0).toDouble(),
+      tokensEmitidos:         (d['tokens_emitidos']  ?? 0).toInt(),
+      status:                 d['status']                   ?? '',
+      socios:                 d['socios']                   ?? '',
+      participacaoSocietaria: d['participacao_societaria']  ?? '',
+      mentoresConselho:       d['mentores_conselho']         ?? '',
+      videoDemo:              d['video_demo']                ?? '',
     );
   }
 

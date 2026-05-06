@@ -4,6 +4,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/startup_model.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
@@ -31,11 +33,14 @@ class _HomeScreenState extends State<HomeScreen>
   late AnimationController _animCtrl;
   late Animation<double> _fadeAnim;
 
+  // ── Stream em tempo real do documento do usuário no Firestore ───────────────
+  Stream<DocumentSnapshot>? _userStream;
+
   @override
   void initState() {
     super.initState();
     if (widget.userModel != null) _currentUser = widget.userModel;
-    _loadUserData();
+    _initUserStream();
     _animCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 700));
     _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
@@ -48,9 +53,15 @@ class _HomeScreenState extends State<HomeScreen>
     super.dispose();
   }
 
-  Future<void> _loadUserData() async {
-    final user = await _authService.getUserData();
-    if (mounted && user != null) setState(() => _currentUser = user);
+  /// Inicia o stream do documento do usuário para atualização em tempo real
+  void _initUserStream() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      _userStream = FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .snapshots();
+    }
   }
 
   Future<void> _handleLogout() async {
@@ -77,7 +88,7 @@ class _HomeScreenState extends State<HomeScreen>
                 child: RefreshIndicator(
                   color: AppTheme.primary,
                   backgroundColor: AppTheme.surface,
-                  onRefresh: _loadUserData,
+                  onRefresh: () async => _initUserStream(),
                   child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     child: Column(
@@ -115,7 +126,6 @@ class _HomeScreenState extends State<HomeScreen>
       ),
       child: Row(
         children: [
-          // Logo
           Row(
             children: [
               Container(
@@ -141,10 +151,7 @@ class _HomeScreenState extends State<HomeScreen>
                       letterSpacing: -0.3)),
             ],
           ),
-
           const Spacer(),
-
-          // Sino
           IconButton(
             onPressed: () {},
             icon: Stack(
@@ -164,10 +171,7 @@ class _HomeScreenState extends State<HomeScreen>
               ],
             ),
           ),
-
           const SizedBox(width: 4),
-
-          // Avatar com menu
           _buildUserMenu(),
         ],
       ),
@@ -226,8 +230,39 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  // ── Banner de boas-vindas ──────────────────────────────────────────────────
+  // ── Banner de boas-vindas — saldo e tokens em tempo real ───────────────────
   Widget _buildWelcomeBanner() {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: _userStream,
+      builder: (context, snapshot) {
+        // Atualiza o _currentUser sempre que o Firestore mudar
+        if (snapshot.hasData && snapshot.data!.exists) {
+          final data = snapshot.data!.data() as Map<String, dynamic>;
+          final saldo = (data['saldo_carteira'] ?? 0).toDouble();
+          final nome  = data['nome'] as String? ?? _currentUser?.nome ?? '';
+
+          // Formata saldo
+          final saldoStr = saldo >= 1000000
+              ? 'R\$ ${(saldo / 1000000).toStringAsFixed(1)}M'
+              : saldo >= 1000
+                  ? 'R\$ ${(saldo / 1000).toStringAsFixed(1)}K'
+                  : 'R\$ ${saldo.toStringAsFixed(2)}';
+
+          return _bannerContent(nome, saldoStr, snapshot.data!.reference);
+        }
+
+        // Fallback enquanto carrega
+        return _bannerContent(
+          _currentUser?.nome ?? '',
+          _currentUser?.saldoFormatado ?? 'R\$ --',
+          null,
+        );
+      },
+    );
+  }
+
+  Widget _bannerContent(
+      String nome, String saldo, DocumentReference? userRef) {
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 20, 20, 0),
       padding: const EdgeInsets.all(22),
@@ -243,7 +278,6 @@ class _HomeScreenState extends State<HomeScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Saudação
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -252,7 +286,7 @@ class _HomeScreenState extends State<HomeScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Olá, ${_currentUser?.nome.split(' ').first ?? 'Investidor'} 👋',
+                      'Olá, ${nome.split(' ').first.isNotEmpty ? nome.split(' ').first : 'Investidor'} 👋',
                       style: GoogleFonts.dmSans(
                           color: AppTheme.textSecondary, fontSize: 13),
                     ),
@@ -286,22 +320,20 @@ class _HomeScreenState extends State<HomeScreen>
           Divider(color: AppTheme.surfaceLight.withOpacity(0.5)),
           const SizedBox(height: 16),
 
-          // Métricas
           Row(
             children: [
+              // Saldo em tempo real
               Expanded(child: _bannerMetric(
                 Icons.account_balance_wallet_outlined,
                 'Saldo Disponível',
-                _currentUser?.saldoFormatado ?? 'R\$ --',
+                saldo,
                 AppTheme.primary,
               )),
               Container(width: 1, height: 40, color: AppTheme.surfaceLight),
-              Expanded(child: _bannerMetric(
-                Icons.token_outlined,
-                'Tokens',
-                '0',
-                AppTheme.gold,
-              )),
+
+              // Tokens em tempo real
+              Expanded(child: _buildTokensMetric(userRef)),
+
               Container(width: 1, height: 40, color: AppTheme.surfaceLight),
               Expanded(child: _bannerMetric(
                 Icons.shield_outlined,
@@ -316,7 +348,38 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _bannerMetric(IconData icon, String label, String value, Color color) {
+  /// Conta o total de tokens do usuário somando todas as posições
+  Widget _buildTokensMetric(DocumentReference? userRef) {
+    if (userRef == null) {
+      return _bannerMetric(
+          Icons.token_outlined, 'Tokens', '0', AppTheme.gold);
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: userRef.collection('positions').snapshots(),
+      builder: (context, snap) {
+        int totalTokens = 0;
+        if (snap.hasData) {
+          for (final doc in snap.data!.docs) {
+            final data = doc.data() as Map<String, dynamic>;
+            totalTokens += (data['quantidade'] ?? 0) as int;
+          }
+        }
+
+        final tokenStr = totalTokens >= 1000000
+            ? '${(totalTokens / 1000000).toStringAsFixed(1)}M'
+            : totalTokens >= 1000
+                ? '${(totalTokens / 1000).toStringAsFixed(0)}K'
+                : '$totalTokens';
+
+        return _bannerMetric(
+            Icons.token_outlined, 'Tokens', tokenStr, AppTheme.gold);
+      },
+    );
+  }
+
+  Widget _bannerMetric(
+      IconData icon, String label, String value, Color color) {
     return Column(children: [
       Icon(icon, color: color, size: 17),
       const SizedBox(height: 6),
@@ -350,12 +413,10 @@ class _HomeScreenState extends State<HomeScreen>
                       color: AppTheme.textPrimary,
                       fontSize: 19,
                       fontWeight: FontWeight.w700)),
-              Text('Ecossistema Mescla · PUC-Campinas',
-                  style: const TextStyle(
-                      color: AppTheme.textMuted, fontSize: 11)),
+              const Text('Ecossistema Mescla · PUC-Campinas',
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             ],
           ),
-          // Badge live
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
@@ -388,10 +449,10 @@ class _HomeScreenState extends State<HomeScreen>
   // ── Filtros ────────────────────────────────────────────────────────────────
   Widget _buildFilterRow() {
     final filtros = [
-      {'value': 'todos',    'label': 'Todos',       'icon': Icons.apps_rounded},
-      {'value': 'nova',     'label': 'Novas',       'icon': Icons.fiber_new_outlined},
-      {'value': 'operacao', 'label': 'Operação',    'icon': Icons.play_circle_outline},
-      {'value': 'expansao', 'label': 'Expansão',    'icon': Icons.rocket_launch_outlined},
+      {'value': 'todos',    'label': 'Todos',    'icon': Icons.apps_rounded},
+      {'value': 'nova',     'label': 'Novas',    'icon': Icons.fiber_new_outlined},
+      {'value': 'operacao', 'label': 'Operação', 'icon': Icons.play_circle_outline},
+      {'value': 'expansao', 'label': 'Expansão', 'icon': Icons.rocket_launch_outlined},
     ];
 
     return SizedBox(
@@ -423,13 +484,19 @@ class _HomeScreenState extends State<HomeScreen>
                 children: [
                   Icon(f['icon'] as IconData,
                       size: 13,
-                      color: selected ? AppTheme.background : AppTheme.textSecondary),
+                      color: selected
+                          ? AppTheme.background
+                          : AppTheme.textSecondary),
                   const SizedBox(width: 5),
                   Text(f['label'] as String,
                       style: TextStyle(
-                          color: selected ? AppTheme.background : AppTheme.textSecondary,
+                          color: selected
+                              ? AppTheme.background
+                              : AppTheme.textSecondary,
                           fontSize: 12,
-                          fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
+                          fontWeight: selected
+                              ? FontWeight.w700
+                              : FontWeight.w500)),
                 ],
               ),
             ),
@@ -444,21 +511,18 @@ class _HomeScreenState extends State<HomeScreen>
     return StreamBuilder<List<StartupModel>>(
       stream: _firestoreService.getStartupsStream(),
       builder: (context, snapshot) {
-
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Padding(
             padding: EdgeInsets.symmetric(vertical: 60),
             child: Center(
-              child: Column(
-                children: [
-                  CircularProgressIndicator(
-                      color: AppTheme.primary, strokeWidth: 2),
-                  SizedBox(height: 16),
-                  Text('Carregando startups...',
-                      style: TextStyle(
-                          color: AppTheme.textMuted, fontSize: 13)),
-                ],
-              ),
+              child: Column(children: [
+                CircularProgressIndicator(
+                    color: AppTheme.primary, strokeWidth: 2),
+                SizedBox(height: 16),
+                Text('Carregando startups...',
+                    style: TextStyle(
+                        color: AppTheme.textMuted, fontSize: 13)),
+              ]),
             ),
           );
         }
@@ -489,7 +553,9 @@ class _HomeScreenState extends State<HomeScreen>
             ? todas
             : todas.where((s) {
                 final e = s.estagio.toLowerCase();
-                return e == _filtro || e == 'em_$_filtro' || e == 'em $_filtro';
+                return e == _filtro ||
+                    e == 'em_$_filtro' ||
+                    e == 'em $_filtro';
               }).toList();
 
         if (lista.isEmpty) {
@@ -497,10 +563,13 @@ class _HomeScreenState extends State<HomeScreen>
             padding: const EdgeInsets.symmetric(vertical: 48),
             child: Center(
               child: Column(children: [
-                Icon(todas.isEmpty
-                    ? Icons.rocket_launch_outlined
-                    : Icons.filter_list_off_rounded,
-                    color: AppTheme.textMuted, size: 44),
+                Icon(
+                  todas.isEmpty
+                      ? Icons.rocket_launch_outlined
+                      : Icons.filter_list_off_rounded,
+                  color: AppTheme.textMuted,
+                  size: 44,
+                ),
                 const SizedBox(height: 12),
                 Text(
                   todas.isEmpty
@@ -524,13 +593,11 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  // ── Card de startup profissional ───────────────────────────────────────────
+  // ── Card de startup ────────────────────────────────────────────────────────
   Widget _buildStartupCard(StartupModel s) {
     return GestureDetector(
       onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => StartupDetailScreen(startup: s),
-        ),
+        MaterialPageRoute(builder: (_) => StartupDetailScreen(startup: s)),
       ),
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
@@ -549,13 +616,11 @@ class _HomeScreenState extends State<HomeScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Cabeçalho ────────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.all(18),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Avatar
                   Container(
                     width: 52, height: 52,
                     decoration: BoxDecoration(
@@ -597,19 +662,16 @@ class _HomeScreenState extends State<HomeScreen>
                 ],
               ),
             ),
-
-            // ── Descrição ─────────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 0, 18, 14),
               child: Text(s.descricao,
                   style: const TextStyle(
                       color: AppTheme.textSecondary,
-                      fontSize: 13, height: 1.5),
+                      fontSize: 13,
+                      height: 1.5),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis),
             ),
-
-            // ── Sócios ────────────────────────────────────────────────────
             if (s.socios.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(18, 0, 18, 14),
@@ -634,31 +696,21 @@ class _HomeScreenState extends State<HomeScreen>
                   ],
                 ]),
               ),
-
-            // ── Divisor ───────────────────────────────────────────────────
             const Divider(height: 1, color: AppTheme.surfaceLight),
-
-            // ── Métricas + Botão ─────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
               child: Row(
                 children: [
-                  // Capital
                   _miniMetric(Icons.account_balance_wallet_outlined,
                       s.capitalFormatado, 'Capital', AppTheme.primary),
                   const SizedBox(width: 20),
-                  // Tokens
                   _miniMetric(Icons.token_outlined,
                       s.tokensFormatado, 'Tokens', AppTheme.gold),
-
                   const Spacer(),
-
-                  // Botão Ver detalhes
                   GestureDetector(
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => StartupDetailScreen(startup: s),
-                      ),
+                          builder: (_) => StartupDetailScreen(startup: s)),
                     ),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
@@ -690,7 +742,8 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _miniMetric(IconData icon, String value, String label, Color color) {
+  Widget _miniMetric(
+      IconData icon, String value, String label, Color color) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -744,66 +797,90 @@ class _HomeScreenState extends State<HomeScreen>
       backgroundColor: AppTheme.surface,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40, height: 4,
-              decoration: BoxDecoration(
-                  color: AppTheme.surfaceLight,
-                  borderRadius: BorderRadius.circular(2)),
-            ),
-            const SizedBox(height: 24),
-            Container(
-              width: 70, height: 70,
-              decoration: const BoxDecoration(
-                  gradient: AppTheme.primaryGradient, shape: BoxShape.circle),
-              child: Center(
-                child: Text(_currentUser?.iniciais ?? '?',
+      builder: (_) => StreamBuilder<DocumentSnapshot>(
+        stream: _userStream,
+        builder: (context, snap) {
+          String nome  = _currentUser?.nome ?? '—';
+          String email = _currentUser?.email ?? '';
+          String saldo = _currentUser?.saldoFormatado ?? 'R\$ --';
+
+          if (snap.hasData && snap.data!.exists) {
+            final data = snap.data!.data() as Map<String, dynamic>;
+            nome  = data['nome']  as String? ?? nome;
+            email = data['email'] as String? ?? email;
+            final s = (data['saldo_carteira'] ?? 0).toDouble();
+            saldo = s >= 1000
+                ? 'R\$ ${(s / 1000).toStringAsFixed(1)}K'
+                : 'R\$ ${s.toStringAsFixed(2)}';
+          }
+
+          final iniciais = nome.trim().isNotEmpty
+              ? nome.trim().split(' ').map((p) => p[0]).take(2).join()
+              : '?';
+
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                      color: AppTheme.surfaceLight,
+                      borderRadius: BorderRadius.circular(2)),
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  width: 70, height: 70,
+                  decoration: const BoxDecoration(
+                      gradient: AppTheme.primaryGradient,
+                      shape: BoxShape.circle),
+                  child: Center(
+                    child: Text(iniciais.toUpperCase(),
+                        style: GoogleFonts.spaceGrotesk(
+                            color: AppTheme.background,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800)),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(nome,
                     style: GoogleFonts.spaceGrotesk(
-                        color: AppTheme.background,
-                        fontSize: 26,
-                        fontWeight: FontWeight.w800)),
-              ),
+                        color: AppTheme.textPrimary,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700)),
+                const SizedBox(height: 4),
+                Text(email,
+                    style: const TextStyle(
+                        color: AppTheme.textSecondary, fontSize: 13)),
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceLight,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.account_balance_wallet_outlined,
+                          color: AppTheme.primary, size: 18),
+                      const SizedBox(width: 8),
+                      const Text('Saldo: ',
+                          style: TextStyle(
+                              color: AppTheme.textSecondary, fontSize: 14)),
+                      Text(saldo,
+                          style: GoogleFonts.spaceGrotesk(
+                              color: AppTheme.primary,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 14),
-            Text(_currentUser?.nome ?? '—',
-                style: GoogleFonts.spaceGrotesk(
-                    color: AppTheme.textPrimary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700)),
-            const SizedBox(height: 4),
-            Text(_currentUser?.email ?? '',
-                style: const TextStyle(
-                    color: AppTheme.textSecondary, fontSize: 13)),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceLight,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.account_balance_wallet_outlined,
-                      color: AppTheme.primary, size: 18),
-                  const SizedBox(width: 8),
-                  Text('Saldo: ',
-                      style: const TextStyle(
-                          color: AppTheme.textSecondary, fontSize: 14)),
-                  Text(_currentUser?.saldoFormatado ?? 'R\$ --',
-                      style: GoogleFonts.spaceGrotesk(
-                          color: AppTheme.primary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700)),
-                ],
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -814,57 +891,72 @@ class _HomeScreenState extends State<HomeScreen>
       backgroundColor: AppTheme.surface,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40, height: 4,
-              decoration: BoxDecoration(
-                  color: AppTheme.surfaceLight,
-                  borderRadius: BorderRadius.circular(2)),
-            ),
-            const SizedBox(height: 24),
-            const Icon(Icons.account_balance_wallet_outlined,
-                color: AppTheme.primary, size: 40),
-            const SizedBox(height: 12),
-            Text('Minha Carteira',
-                style: GoogleFonts.spaceGrotesk(
-                    color: AppTheme.textPrimary,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700)),
-            const SizedBox(height: 20),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(22),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF0D2137), Color(0xFF091929)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+      builder: (_) => StreamBuilder<DocumentSnapshot>(
+        stream: _userStream,
+        builder: (context, snap) {
+          String saldo = _currentUser?.saldoFormatado ?? 'R\$ --';
+          if (snap.hasData && snap.data!.exists) {
+            final data = snap.data!.data() as Map<String, dynamic>;
+            final s = (data['saldo_carteira'] ?? 0).toDouble();
+            saldo = s >= 1000
+                ? 'R\$ ${(s / 1000).toStringAsFixed(1)}K'
+                : 'R\$ ${s.toStringAsFixed(2)}';
+          }
+
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                      color: AppTheme.surfaceLight,
+                      borderRadius: BorderRadius.circular(2)),
                 ),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
-              ),
-              child: Column(children: [
-                const Text('Saldo Disponível',
-                    style: TextStyle(
-                        color: AppTheme.textSecondary, fontSize: 13)),
-                const SizedBox(height: 10),
-                Text(_currentUser?.saldoFormatado ?? 'R\$ --',
+                const SizedBox(height: 24),
+                const Icon(Icons.account_balance_wallet_outlined,
+                    color: AppTheme.primary, size: 40),
+                const SizedBox(height: 12),
+                Text('Minha Carteira',
                     style: GoogleFonts.spaceGrotesk(
-                        color: AppTheme.primary,
-                        fontSize: 30,
-                        fontWeight: FontWeight.w800)),
-                const SizedBox(height: 4),
-                const Text('💡 Saldo Simulado',
-                    style: TextStyle(
-                        color: AppTheme.textMuted, fontSize: 12)),
-              ]),
+                        color: AppTheme.textPrimary,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700)),
+                const SizedBox(height: 20),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(22),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF0D2137), Color(0xFF091929)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(18),
+                    border:
+                        Border.all(color: AppTheme.primary.withOpacity(0.2)),
+                  ),
+                  child: Column(children: [
+                    const Text('Saldo Disponível',
+                        style: TextStyle(
+                            color: AppTheme.textSecondary, fontSize: 13)),
+                    const SizedBox(height: 10),
+                    Text(saldo,
+                        style: GoogleFonts.spaceGrotesk(
+                            color: AppTheme.primary,
+                            fontSize: 30,
+                            fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 4),
+                    const Text('💡 Saldo Simulado',
+                        style: TextStyle(
+                            color: AppTheme.textMuted, fontSize: 12)),
+                  ]),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
