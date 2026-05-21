@@ -1,6 +1,6 @@
 // lib/services/wallet_service.dart
-// Autor: [Seu Nome Completo]
-// RA: [Seu RA]
+// Autor: João Vitor Roventini
+// RA: 22005168
 // Serviço de carteira - todos os reads ANTES dos writes (regra do Firestore)
 
 import 'package:cloud_firestore/cloud_firestore.dart';

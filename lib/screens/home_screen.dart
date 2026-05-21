@@ -1,6 +1,6 @@
 // lib/screens/home_screen.dart
-// Autor: [Seu Nome Completo]
-// RA: [Seu RA]
+// Autor: joão vitor roventini
+// RA: 22005168
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';

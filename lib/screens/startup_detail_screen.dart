@@ -1,6 +1,6 @@
 // lib/screens/startup_detail_screen.dart
-// Autor: [Seu Nome Completo]
-// RA: [Seu RA]
+// Autor: João Vitor Roventini
+// RA: 22005168
 // Detalhe completo — regra do investidor + perguntas privadas + balcão real
 
 import 'package:flutter/material.dart';

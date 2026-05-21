@@ -1,6 +1,6 @@
 // lib/screens/carteira_screen.dart
-// Autor: [Seu Nome Completo]
-// RA: [Seu RA]
+// Autor: João Vitor Roventini
+// RA: 22005168
 // Tela de Carteira — saldo, posições em tokens e histórico de transações
 
 import 'package:flutter/material.dart';
