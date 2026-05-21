@@ -1,7 +1,7 @@
 // lib/screens/startup_detail_screen.dart
 // Autor: [Seu Nome Completo]
 // RA: [Seu RA]
-// Detalhe completo de uma Startup — YouTube + Sumário Executivo + Q&A real + Compra/Venda
+// Detalhe completo — regra do investidor + perguntas privadas + balcão real
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/startup_model.dart';
+import '../models/wallet_model.dart';
 import '../services/wallet_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/gradient_button.dart';
@@ -25,6 +26,15 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
   final _perguntaCtrl  = TextEditingController();
   final _walletService = WalletService();
   bool _enviandoPergunta = false;
+  bool _perguntaPrivada  = false;
+  bool _isInvestidor     = false;
+  TokenPosition? _minhaPosition;
+
+  @override
+  void initState() {
+    super.initState();
+    _verificarInvestidor();
+  }
 
   @override
   void dispose() {
@@ -32,7 +42,31 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
     super.dispose();
   }
 
-  // ── Abre YouTube ────────────────────────────────────────────────────────────
+  // ── Verifica se o usuário já é investidor desta startup ─────────────────────
+  Future<void> _verificarInvestidor() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('positions')
+          .doc(widget.startup.id)
+          .get();
+
+      if (doc.exists && mounted) {
+        final pos = TokenPosition.fromMap(
+            widget.startup.id, doc.data() as Map<String, dynamic>);
+        setState(() {
+          _isInvestidor  = pos.quantidade > 0;
+          _minhaPosition = pos;
+        });
+      }
+    } catch (_) {}
+  }
+
+  // ── Abre YouTube ─────────────────────────────────────────────────────────────
   Future<void> _abrirYoutube() async {
     final urlStr = widget.startup.videoDemo.trim();
     if (urlStr.isEmpty) return;
@@ -43,17 +77,18 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Erro ao abrir o vídeo. Verifique o link.'),
+        content: Text('Erro ao abrir o vídeo.'),
         backgroundColor: AppTheme.error,
       ));
     }
   }
 
-  // ── Envia pergunta ao Firestore ─────────────────────────────────────────────
+  // ── Envia pergunta (pública ou privada) ─────────────────────────────────────
   Future<void> _enviarPergunta() async {
     final texto = _perguntaCtrl.text.trim();
     if (texto.isEmpty) return;
     setState(() => _enviandoPergunta = true);
+
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
       await FirebaseFirestore.instance
@@ -65,19 +100,24 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
         'pergunta': texto,
         'resposta': '',
         'data':     FieldValue.serverTimestamp(),
-        'publica':  true,
+        'publica':  !_perguntaPrivada, // privada = só o empreendedor vê
       });
+
       _perguntaCtrl.clear();
+      setState(() => _perguntaPrivada = false);
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Pergunta enviada ao empreendedor!'),
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(_perguntaPrivada
+              ? '🔒 Pergunta privada enviada!'
+              : '✅ Pergunta pública enviada!'),
           backgroundColor: AppTheme.surfaceLight,
         ));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Erro ao enviar: $e'),
+          content: Text('Erro: $e'),
           backgroundColor: AppTheme.error,
         ));
       }
@@ -86,7 +126,7 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
     }
   }
 
-  // ── Compra/Venda real via WalletService ─────────────────────────────────────
+  // ── Compra/Venda real ────────────────────────────────────────────────────────
   Future<void> _processarNegociacao(String tipo, int quantidade) async {
     final s = widget.startup;
     WalletResult result;
@@ -111,6 +151,11 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
 
     if (!mounted) return;
 
+    if (result.success) {
+      // Atualiza status de investidor após compra
+      await _verificarInvestidor();
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(result.success
           ? tipo == 'comprar'
@@ -132,28 +177,7 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              // ── AppBar ────────────────────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.fromLTRB(8, 8, 20, 4),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                          color: AppTheme.textPrimary, size: 20),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                    Expanded(
-                      child: Text(s.nomeStartup,
-                          style: GoogleFonts.spaceGrotesk(
-                              color: AppTheme.textPrimary,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700),
-                          overflow: TextOverflow.ellipsis),
-                    ),
-                  ],
-                ),
-              ),
-
+              _buildAppBar(s),
               Expanded(
                 child: SingleChildScrollView(
                   physics: const BouncingScrollPhysics(),
@@ -163,31 +187,28 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
                     children: [
                       _buildHeader(s),
                       const SizedBox(height: 16),
+
+                      // Banner exclusivo para investidores
+                      if (_isInvestidor) ...[
+                        _buildInvestidorBanner(),
+                        const SizedBox(height: 16),
+                      ],
+
                       _buildMetrics(s),
                       const SizedBox(height: 20),
 
-                      // ── Botão YouTube ─────────────────────────────────────
                       if (s.videoDemo.isNotEmpty) ...[
                         _buildVideoButton(),
                         const SizedBox(height: 20),
                       ],
 
-                      // ── Sumário Executivo ─────────────────────────────────
-                      if (s.sumarioExecutivo.isNotEmpty) ...[
-                        _buildSumario(s),
-                        const SizedBox(height: 16),
-                      ],
-
-                      // ── Descrição ─────────────────────────────────────────
                       _buildInfoSection(
                           'Descrição', s.descricao, Icons.info_outline),
                       const SizedBox(height: 16),
 
-                      // ── Estrutura Societária ──────────────────────────────
                       _buildSocietaria(s),
                       const SizedBox(height: 16),
 
-                      // ── Mentores / Conselho ───────────────────────────────
                       if (s.mentoresConselho.isNotEmpty) ...[
                         _buildInfoSection(
                           'Mentores / Conselho',
@@ -197,11 +218,9 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
                         const SizedBox(height: 16),
                       ],
 
-                      // ── Q&A ───────────────────────────────────────────────
                       _buildQnA(s),
                       const SizedBox(height: 16),
 
-                      // ── Balcão de Tokens ──────────────────────────────────
                       _buildNegociacao(s),
                       const SizedBox(height: 24),
                     ],
@@ -215,69 +234,122 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
     );
   }
 
-  // ── Sumário Executivo ───────────────────────────────────────────────────────
-  Widget _buildSumario(StartupModel s) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [
-          const Icon(Icons.description_outlined,
-              color: AppTheme.primary, size: 16),
-          const SizedBox(width: 8),
-          Text('Sumário Executivo',
-              style: GoogleFonts.spaceGrotesk(
-                  color: AppTheme.textPrimary,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700)),
-        ]),
-        const SizedBox(height: 10),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppTheme.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
+  // ── AppBar ──────────────────────────────────────────────────────────────────
+  Widget _buildAppBar(StartupModel s) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 20, 4),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                color: AppTheme.textPrimary, size: 20),
+            onPressed: () => Navigator.of(context).pop(),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Badge "Documento público"
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppTheme.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.lock_open_outlined,
-                        color: AppTheme.primary, size: 11),
-                    const SizedBox(width: 4),
-                    Text('Documento público',
-                        style: const TextStyle(
-                            color: AppTheme.primary,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600)),
-                  ],
-                ),
+          Expanded(
+            child: Text(s.nomeStartup,
+                style: GoogleFonts.spaceGrotesk(
+                    color: AppTheme.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700),
+                overflow: TextOverflow.ellipsis),
+          ),
+          // Ícone de investidor
+          if (_isInvestidor)
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppTheme.gold.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: AppTheme.gold.withOpacity(0.3)),
               ),
-              const SizedBox(height: 12),
-              Text(s.sumarioExecutivo,
-                  style: const TextStyle(
-                      color: AppTheme.textSecondary,
-                      fontSize: 13,
-                      height: 1.7)),
-            ],
-          ),
+              child: Row(children: [
+                const Icon(Icons.verified_rounded,
+                    color: AppTheme.gold, size: 13),
+                const SizedBox(width: 4),
+                Text('Investidor',
+                    style: TextStyle(
+                        color: AppTheme.gold,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700)),
+              ]),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ── Banner exclusivo investidor ──────────────────────────────────────────────
+  Widget _buildInvestidorBanner() {
+    final p = _minhaPosition;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppTheme.gold.withOpacity(0.15),
+            AppTheme.gold.withOpacity(0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.gold.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.verified_rounded,
+                color: AppTheme.gold, size: 16),
+            const SizedBox(width: 8),
+            Text('Você é investidor desta startup',
+                style: GoogleFonts.spaceGrotesk(
+                    color: AppTheme.gold,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700)),
+          ]),
+          if (p != null) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(child: _investidorMetric(
+                    'Meus Tokens', '${p.quantidade}')),
+                Expanded(child: _investidorMetric(
+                    'Valor Atual', p.valorFormatado)),
+                Expanded(child: _investidorMetric(
+                    'Resultado',
+                    '${p.lucroReais >= 0 ? '+' : ''}R\$ ${p.lucroReais.toStringAsFixed(2)}',
+                    cor: p.lucroReais >= 0
+                        ? AppTheme.primary
+                        : AppTheme.error)),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _investidorMetric(String label, String value, {Color? cor}) {
+    return Column(
+      children: [
+        Text(value,
+            style: GoogleFonts.spaceGrotesk(
+                color: cor ?? AppTheme.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w700),
+            textAlign: TextAlign.center),
+        Text(label,
+            style: const TextStyle(
+                color: AppTheme.textMuted, fontSize: 10),
+            textAlign: TextAlign.center),
       ],
     );
   }
 
-  // ── Botão YouTube ───────────────────────────────────────────────────────────
+  // ── Botão YouTube ────────────────────────────────────────────────────────────
   Widget _buildVideoButton() {
     return Container(
       width: double.infinity,
@@ -292,22 +364,20 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
           onTap: _abrirYoutube,
           borderRadius: BorderRadius.circular(16),
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            padding:
+                const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Icon(Icons.play_circle_fill_rounded,
                     color: Color(0xFFCD201F), size: 24),
                 const SizedBox(width: 12),
-                Text(
-                  'ASSISTIR PITCH NO YOUTUBE',
-                  style: GoogleFonts.spaceGrotesk(
-                    color: AppTheme.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5,
-                  ),
-                ),
+                Text('ASSISTIR PITCH NO YOUTUBE',
+                    style: GoogleFonts.spaceGrotesk(
+                        color: AppTheme.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5)),
               ],
             ),
           ),
@@ -316,7 +386,7 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
     );
   }
 
-  // ── Header ──────────────────────────────────────────────────────────────────
+  // ── Header ───────────────────────────────────────────────────────────────────
   Widget _buildHeader(StartupModel s) {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -369,7 +439,7 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
     );
   }
 
-  // ── Métricas ────────────────────────────────────────────────────────────────
+  // ── Métricas ─────────────────────────────────────────────────────────────────
   Widget _buildMetrics(StartupModel s) {
     return Row(
       children: [
@@ -390,7 +460,8 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
     );
   }
 
-  Widget _metricCard(IconData icon, String label, String value, Color color) {
+  Widget _metricCard(
+      IconData icon, String label, String value, Color color) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -417,8 +488,9 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
     );
   }
 
-  // ── Seção de texto genérica ─────────────────────────────────────────────────
-  Widget _buildInfoSection(String title, String content, IconData icon) {
+  // ── Seção de texto ───────────────────────────────────────────────────────────
+  Widget _buildInfoSection(
+      String title, String content, IconData icon) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -450,17 +522,15 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
     );
   }
 
-  // ── Estrutura Societária ────────────────────────────────────────────────────
+  // ── Estrutura Societária ─────────────────────────────────────────────────────
   Widget _buildSocietaria(StartupModel s) {
-    final sociosList = s.socios
+    final socios = s.socios
         .split(';')
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .toList();
-    final participacoes = s.participacaoSocietaria
-        .split(';')
-        .map((e) => e.trim())
-        .toList();
+    final participacoes =
+        s.participacaoSocietaria.split(';').map((e) => e.trim()).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -485,12 +555,12 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
             border: Border.all(color: AppTheme.surfaceLight),
           ),
           child: Column(
-            children: List.generate(sociosList.length, (i) {
+            children: List.generate(socios.length, (i) {
               final participacao =
                   i < participacoes.length ? participacoes[i] : '';
               return Padding(
                 padding: EdgeInsets.only(
-                    bottom: i < sociosList.length - 1 ? 12 : 0),
+                    bottom: i < socios.length - 1 ? 12 : 0),
                 child: Row(
                   children: [
                     Container(
@@ -501,8 +571,8 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
                       ),
                       child: Center(
                         child: Text(
-                          sociosList[i].isNotEmpty
-                              ? sociosList[i][0].toUpperCase()
+                          socios[i].isNotEmpty
+                              ? socios[i][0].toUpperCase()
                               : '?',
                           style: GoogleFonts.spaceGrotesk(
                               color: AppTheme.background,
@@ -513,7 +583,7 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text(sociosList[i],
+                      child: Text(socios[i],
                           style: const TextStyle(
                               color: AppTheme.textPrimary,
                               fontSize: 13,
@@ -543,8 +613,10 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
     );
   }
 
-  // ── Q&A — dados reais do Firestore ──────────────────────────────────────────
+  // ── Q&A com perguntas privadas ──────────────────────────────────────────────
   Widget _buildQnA(StartupModel s) {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -557,64 +629,115 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
                   color: AppTheme.textPrimary,
                   fontSize: 15,
                   fontWeight: FontWeight.w700)),
+          if (_isInvestidor) ...[
+            const SizedBox(width: 8),
+            _badge('Investidor', AppTheme.gold),
+          ],
         ]),
         const SizedBox(height: 12),
 
         // Campo de envio
-        Row(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: TextField(
-                controller: _perguntaCtrl,
-                style: const TextStyle(
-                    color: AppTheme.textPrimary, fontSize: 13),
-                decoration: InputDecoration(
-                  hintText: 'Envie uma pergunta ao empreendedor...',
-                  hintStyle: const TextStyle(
-                      color: AppTheme.textMuted, fontSize: 13),
-                  filled: true,
-                  fillColor: AppTheme.surfaceLight,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide.none,
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _perguntaCtrl,
+                    style: const TextStyle(
+                        color: AppTheme.textPrimary, fontSize: 13),
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      hintText: 'Envie uma pergunta...',
+                      hintStyle: const TextStyle(
+                          color: AppTheme.textMuted, fontSize: 13),
+                      filled: true,
+                      fillColor: AppTheme.surfaceLight,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: _enviandoPergunta ? null : _enviarPergunta,
-              child: Container(
-                padding: const EdgeInsets.all(11),
-                decoration: BoxDecoration(
-                  gradient: AppTheme.primaryGradient,
-                  borderRadius: BorderRadius.circular(10),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _enviandoPergunta ? null : _enviarPergunta,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      gradient: AppTheme.primaryGradient,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: _enviandoPergunta
+                        ? const SizedBox(
+                            width: 18, height: 18,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppTheme.background))
+                        : const Icon(Icons.send_rounded,
+                            color: AppTheme.background, size: 18),
+                  ),
                 ),
-                child: _enviandoPergunta
-                    ? const SizedBox(
-                        width: 18, height: 18,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppTheme.background))
-                    : const Icon(Icons.send_rounded,
-                        color: AppTheme.background, size: 18),
-              ),
+              ],
             ),
+
+            // Toggle pergunta privada — só para investidores
+            if (_isInvestidor) ...[
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: () =>
+                    setState(() => _perguntaPrivada = !_perguntaPrivada),
+                child: Row(
+                  children: [
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: 18, height: 18,
+                      decoration: BoxDecoration(
+                        color: _perguntaPrivada
+                            ? AppTheme.gold
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                            color: _perguntaPrivada
+                                ? AppTheme.gold
+                                : AppTheme.textMuted),
+                      ),
+                      child: _perguntaPrivada
+                          ? const Icon(Icons.check_rounded,
+                              color: AppTheme.background, size: 13)
+                          : null,
+                    ),
+                    const SizedBox(width: 8),
+                    Row(children: [
+                      const Icon(Icons.lock_outline,
+                          color: AppTheme.gold, size: 13),
+                      const SizedBox(width: 4),
+                      Text('Pergunta privada (só o empreendedor vê)',
+                          style: TextStyle(
+                              color: _perguntaPrivada
+                                  ? AppTheme.gold
+                                  : AppTheme.textMuted,
+                              fontSize: 11)),
+                    ]),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
 
         const SizedBox(height: 14),
 
-        // Lista do Firestore em tempo real
+        // Lista do Firestore — públicas para todos, privadas só para o autor
         StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection('startups')
               .doc(s.id)
               .collection('perguntas')
-              .where('publica', isEqualTo: true)
-              .orderBy('data', descending: true)
               .snapshots(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -629,7 +752,15 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
 
             final docs = snapshot.data?.docs ?? [];
 
-            if (docs.isEmpty) {
+            // Filtra: mostra públicas + privadas do próprio usuário
+            final visiveis = docs.where((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              final publica = data['publica'] as bool? ?? true;
+              final autorUid = data['uid'] as String? ?? '';
+              return publica || autorUid == uid;
+            }).toList();
+
+            if (visiveis.isEmpty) {
               return Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -651,13 +782,14 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
             }
 
             return Column(
-              children: docs.map((doc) {
+              children: visiveis.map((doc) {
                 final data = doc.data() as Map<String, dynamic>;
                 final pergunta = data['pergunta'] as String? ?? '';
                 final resposta = data['resposta'] as String? ?? '';
+                final publica  = data['publica']  as bool?   ?? true;
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: _qnaItem(pergunta, resposta),
+                  child: _qnaItem(pergunta, resposta, publica),
                 );
               }).toList(),
             );
@@ -667,7 +799,7 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
     );
   }
 
-  Widget _qnaItem(String pergunta, String resposta) {
+  Widget _qnaItem(String pergunta, String resposta, bool publica) {
     final temResposta = resposta.isNotEmpty;
     return Container(
       padding: const EdgeInsets.all(14),
@@ -675,17 +807,22 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: temResposta
-              ? AppTheme.primary.withOpacity(0.2)
-              : AppTheme.surfaceLight,
+          color: !publica
+              ? AppTheme.gold.withOpacity(0.3)
+              : temResposta
+                  ? AppTheme.primary.withOpacity(0.2)
+                  : AppTheme.surfaceLight,
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Icon(Icons.help_outline,
-                color: AppTheme.accent, size: 13),
+            Icon(
+              !publica ? Icons.lock_outline : Icons.help_outline,
+              color: !publica ? AppTheme.gold : AppTheme.accent,
+              size: 13,
+            ),
             const SizedBox(width: 6),
             Expanded(
               child: Text(pergunta,
@@ -695,6 +832,20 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
                       fontWeight: FontWeight.w500,
                       height: 1.4)),
             ),
+            if (!publica)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppTheme.gold.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text('PRIVADA',
+                    style: TextStyle(
+                        color: AppTheme.gold,
+                        fontSize: 8,
+                        fontWeight: FontWeight.w700)),
+              ),
           ]),
           if (temResposta) ...[
             const SizedBox(height: 10),
@@ -735,9 +886,9 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
     );
   }
 
-  // ── Balcão de tokens ────────────────────────────────────────────────────────
+  // ── Balcão de tokens ─────────────────────────────────────────────────────────
   Widget _buildNegociacao(StartupModel s) {
-    final precoUnitario = s.tokensEmitidos > 0
+    final preco = s.tokensEmitidos > 0
         ? s.capitalAportado / s.tokensEmitidos
         : 0.0;
 
@@ -771,7 +922,7 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
                 color: AppTheme.primary, size: 13),
             const SizedBox(width: 6),
             Text(
-              'Preço atual: R\$ ${precoUnitario.toStringAsFixed(4)}/token',
+              'Preço atual: R\$ ${preco.toStringAsFixed(4)}/token',
               style: const TextStyle(
                   color: AppTheme.textSecondary, fontSize: 12),
             ),
@@ -788,25 +939,28 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
                 ),
               ),
               const SizedBox(width: 10),
-              Expanded(
-                child: SizedBox(
-                  height: 44,
-                  child: OutlinedButton.icon(
-                    onPressed: () => _showNegociacao('vender'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.gold,
-                      side: const BorderSide(color: AppTheme.gold),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+              // Vender só aparece se for investidor
+              if (_isInvestidor)
+                Expanded(
+                  child: SizedBox(
+                    height: 44,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _showNegociacao('vender'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppTheme.gold,
+                        side:
+                            const BorderSide(color: AppTheme.gold),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.remove_rounded, size: 16),
+                      label: Text('Vender',
+                          style: GoogleFonts.dmSans(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13)),
                     ),
-                    icon: const Icon(Icons.remove_rounded, size: 16),
-                    label: Text('Vender',
-                        style: GoogleFonts.dmSans(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13)),
                   ),
                 ),
-              ),
             ],
           ),
         ],
@@ -826,7 +980,7 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
     showDialog(
       context: context,
       builder: (_) => StatefulBuilder(
-        builder: (ctx, setModalState) {
+        builder: (ctx, setModal) {
           final qtd = int.tryParse(ctrl.text) ?? 0;
           final total = qtd * preco;
 
@@ -835,13 +989,17 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20)),
             title: Row(children: [
-              Icon(isCompra
-                  ? Icons.add_circle_outline
-                  : Icons.remove_circle_outline,
-                  color: color, size: 20),
+              Icon(
+                isCompra
+                    ? Icons.add_circle_outline
+                    : Icons.remove_circle_outline,
+                color: color, size: 20,
+              ),
               const SizedBox(width: 8),
-              Text(isCompra ? 'Comprar Tokens' : 'Vender Tokens',
-                  style: TextStyle(color: color, fontSize: 16)),
+              Text(
+                isCompra ? 'Comprar Tokens' : 'Vender Tokens',
+                style: TextStyle(color: color, fontSize: 16),
+              ),
             ]),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -850,22 +1008,20 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
                 Text('Startup: ${s.nomeStartup}',
                     style: const TextStyle(
                         color: AppTheme.textSecondary, fontSize: 12)),
-                Text(
-                  'Preço: R\$ ${preco.toStringAsFixed(4)}/token',
-                  style: const TextStyle(
-                      color: AppTheme.textSecondary, fontSize: 12),
-                ),
+                Text('Preço: R\$ ${preco.toStringAsFixed(4)}/token',
+                    style: const TextStyle(
+                        color: AppTheme.textSecondary, fontSize: 12)),
                 const SizedBox(height: 14),
                 TextField(
                   controller: ctrl,
                   keyboardType: TextInputType.number,
                   style: const TextStyle(color: AppTheme.textPrimary),
-                  onChanged: (_) => setModalState(() {}),
+                  onChanged: (_) => setModal(() {}),
                   decoration: const InputDecoration(
                     labelText: 'Quantidade de tokens',
                     suffixText: 'tokens',
-                    suffixStyle:
-                        TextStyle(color: AppTheme.textSecondary),
+                    suffixStyle: TextStyle(
+                        color: AppTheme.textSecondary),
                   ),
                 ),
                 if (qtd > 0) ...[
@@ -877,7 +1033,8 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      mainAxisAlignment:
+                          MainAxisAlignment.spaceBetween,
                       children: [
                         Text('Total:',
                             style: TextStyle(
@@ -899,7 +1056,8 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text('Cancelar',
-                    style: TextStyle(color: AppTheme.textSecondary)),
+                    style: TextStyle(
+                        color: AppTheme.textSecondary)),
               ),
               TextButton(
                 onPressed: qtd <= 0
@@ -909,9 +1067,12 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
                         _processarNegociacao(tipo, qtd);
                       },
                 child: Text(
-                    isCompra ? 'Confirmar Compra' : 'Confirmar Venda',
-                    style: TextStyle(
-                        color: qtd > 0 ? color : AppTheme.textMuted)),
+                  isCompra
+                      ? 'Confirmar Compra'
+                      : 'Confirmar Venda',
+                  style: TextStyle(
+                      color: qtd > 0 ? color : AppTheme.textMuted),
+                ),
               ),
             ],
           );
