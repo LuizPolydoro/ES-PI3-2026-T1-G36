@@ -1,6 +1,6 @@
 // lib/models/wallet_model.dart
-// Autor: João Vitor Roventini
-// RA: 22005168
+// Autor: [Seu Nome Completo]
+// RA: [Seu RA]
 // Model da carteira do usuário e de posições em tokens
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -116,4 +116,12 @@ class Transacao {
         '${data!.month.toString().padLeft(2,'0')}/'
         '${data!.year}';
   }
+}
+
+/// Snapshot de preço para o gráfico
+class PrecoSnapshot {
+  final DateTime data;
+  final double   preco;
+
+  PrecoSnapshot({required this.data, required this.preco});
 }

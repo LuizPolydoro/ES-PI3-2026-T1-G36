@@ -1,6 +1,6 @@
 // lib/screens/home_screen.dart
-// Autor: joão vitor roventini
-// RA: 22005168
+// Autor: [Seu Nome Completo]
+// RA: [Seu RA]
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -11,6 +11,8 @@ import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
 import 'login_screen.dart';
 import 'carteira_screen.dart';
+import 'balcao_screen.dart';
+import 'mfa_screen.dart';
 import 'startup_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -188,6 +190,8 @@ class _HomeScreenState extends State<HomeScreen>
       onSelected: (value) {
         if (value == 'perfil')   _showPerfil();
         if (value == 'carteira') _abrirCarteira();
+        if (value == 'balcao')   _abrirBalcao();
+        if (value == 'mfa')      _abrirMFA();
         if (value == 'logout')   _confirmLogout();
       },
       itemBuilder: (_) => [
@@ -401,7 +405,7 @@ class _HomeScreenState extends State<HomeScreen>
         padding: const EdgeInsets.symmetric(horizontal: 20),
         scrollDirection: Axis.horizontal,
         itemCount: filtros.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (context, _) => const SizedBox(width: 8),
         itemBuilder: (_, i) {
           final f = filtros[i];
           final selected = _filtro == f['value'];
@@ -490,7 +494,7 @@ class _HomeScreenState extends State<HomeScreen>
             ? todas
             : todas.where((s) {
                 final e = s.estagio.toLowerCase();
-                return e == _filtro || e == 'em_$_filtro' || e == 'em $_filtro';
+                return e == _filtro || e == 'em$_filtro' || e == 'em $_filtro';
               }).toList();
 
         if (lista.isEmpty) {
@@ -812,6 +816,18 @@ class _HomeScreenState extends State<HomeScreen>
   void _abrirCarteira() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const CarteiraScreen()),
+    );
+  }
+
+  void _abrirBalcao() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const BalcaoScreen()),
+    );
+  }
+
+  void _abrirMFA() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const MfaScreen()),
     );
   }
 
