@@ -1,6 +1,6 @@
 // lib/models/wallet_model.dart
-// Autor: [Seu Nome Completo]
-// RA: [Seu RA]
+// Autor: João Vitor Roventini
+// RA: 22005168
 // Model da carteira do usuário e de posições em tokens
 
 import 'package:cloud_firestore/cloud_firestore.dart';

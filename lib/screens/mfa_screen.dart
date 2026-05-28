@@ -1,6 +1,6 @@
 // lib/screens/mfa_screen.dart
-// Autor: [Seu Nome Completo]
-// RA: [Seu RA]
+// Autor: João Vitor Roventini
+// RA: 22005168
 // Tela de configuração MFA/2FA — autenticação multifator (requisito 5.5)
 
 import 'package:flutter/material.dart';

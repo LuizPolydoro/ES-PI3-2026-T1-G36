@@ -1,6 +1,6 @@
 // lib/screens/dashboard_screen.dart
-// Autor: [Seu Nome Completo]
-// RA: [Seu RA]
+// Autor: João Vitor Roventini
+// RA: 22005168
 // Dashboard de valorização de tokens — gráfico por período (5.4 do documento)
 
 import 'package:flutter/material.dart';

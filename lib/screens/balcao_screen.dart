@@ -1,6 +1,6 @@
 // lib/screens/balcao_screen.dart
-// Autor: [Seu Nome Completo]
-// RA: [Seu RA]
+// Autor: João Vitor Roventini
+// RA: 22005168
 // Tela de Balcão — interface específica de negociação de tokens
 
 import 'package:flutter/material.dart';

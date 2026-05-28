@@ -1,6 +1,6 @@
 // lib/services/wallet_service.dart
-// Autor: [Seu Nome Completo]
-// RA: [Seu RA]
+// Autor: João Vitor Roventini
+// RA: 22005168
 // Serviço de carteira com histórico de preços para o gráfico
 
 import 'package:cloud_firestore/cloud_firestore.dart';
