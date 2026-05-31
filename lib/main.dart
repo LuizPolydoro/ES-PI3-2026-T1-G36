@@ -9,6 +9,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'theme/app_theme.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
+import 'services/auth_service.dart';
+import 'models/user_model.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,7 +55,6 @@ class AuthWrapper extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // Carregando
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             backgroundColor: AppTheme.background,
@@ -66,12 +67,32 @@ class AuthWrapper extends StatelessWidget {
           );
         }
 
-        // Tem usuário logado → Home
         if (snapshot.hasData && snapshot.data != null) {
-          return const HomeScreen();
+          return FutureBuilder<UserModel?>(
+            future: AuthService().getUserData(),
+            builder: (context, userSnap) {
+              if (userSnap.connectionState == ConnectionState.waiting) {
+                return const Scaffold(
+                  backgroundColor: AppTheme.background,
+                  body: Center(
+                    child: CircularProgressIndicator(
+                      color: AppTheme.primary,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                );
+              }
+
+              if (userSnap.hasData && !AuthService.isSessionVerified) {
+                // Se o usuário está logado mas não verificou o código na sessão atual
+                return VerifyMfaScreen(userModel: userSnap.data);
+              }
+
+              return HomeScreen(userModel: userSnap.data);
+            },
+          );
         }
 
-        // Sem usuário → Login
         return const LoginScreen();
       },
     );

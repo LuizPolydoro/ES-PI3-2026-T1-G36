@@ -9,7 +9,7 @@ import '../theme/app_theme.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/gradient_button.dart';
 import 'cadastro_screen.dart';
-import 'home_screen.dart';
+import 'verify_mfa_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -70,10 +70,14 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _isLoading = false);
 
     if (result.success) {
-      // Passa o userModel direto para a Home
+      // Gera e "envia" o código para o e-mail do usuário
+      await _authService.enviarCodigoSeguranca(_emailCtrl.text);
+
+      // Vai para a tela de código
+      if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => HomeScreen(userModel: result.user),
+          builder: (_) => VerifyMfaScreen(userModel: result.user),
         ),
       );
     } else {

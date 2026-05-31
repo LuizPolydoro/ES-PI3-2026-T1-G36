@@ -17,8 +17,38 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  // Flag para controle de sessão (Código verificado)
+  static bool isSessionVerified = false;
+
+  // Armazena o código gerado temporariamente
+  static String? _codigoTemporario;
+
   Stream<User?> get authStateChanges => _auth.authStateChanges();
   User? get currentUser => _auth.currentUser;
+
+  // ─── GERAR E "ENVIAR" CÓDIGO ───────────────────────────────────────────────
+  Future<void> enviarCodigoSeguranca(String email) async {
+    // Gera um código de 6 dígitos aleatório
+    final random = DateTime.now().millisecondsSinceEpoch.toString();
+    _codigoTemporario = random.substring(random.length - 6);
+
+    // Simulação de envio de e-mail (Exibe no terminal do VS Code/Android Studio)
+    print("--------------------------------------------------");
+    print("📧 [SIMULAÇÃO DE E-MAIL]");
+    print("PARA: $email");
+    print("ASSUNTO: Seu código de acesso MesclaInvest");
+    print("MENSAGEM: Seu código de segurança é: $_codigoTemporario");
+    print("--------------------------------------------------");
+  }
+
+  // ─── VERIFICAR CÓDIGO ──────────────────────────────────────────────────────
+  bool verificarCodigo(String codigoInserido) {
+    if (_codigoTemporario != null && codigoInserido == _codigoTemporario) {
+      isSessionVerified = true;
+      return true;
+    }
+    return false;
+  }
 
   // ─── LOGIN ───────────────────────────────────────────────────────────────────
   Future<AuthResult> login({
@@ -45,7 +75,6 @@ class AuthService {
     } on FirebaseAuthException catch (e) {
       return AuthResult(success: false, errorMessage: _handleAuthError(e.code));
     } catch (e) {
-      // Bug do PigeonUserDetails — verifica se o login aconteceu mesmo assim
       final user = _auth.currentUser;
       if (user != null) {
         try {
@@ -78,9 +107,7 @@ class AuthService {
     } on FirebaseAuthException catch (e) {
       return AuthResult(success: false, errorMessage: _handleAuthError(e.code));
     } catch (e) {
-      // Bug do PigeonUserDetails — pega o uid do currentUser
       uid = _auth.currentUser?.uid;
-      print('Auth cast error (uid=$uid): $e');
     }
 
     if (uid == null) {
@@ -90,7 +117,6 @@ class AuthService {
       );
     }
 
-    // Salva no Firestore usando o uid capturado
     try {
       final userModel = UserModel(
         uid:           uid,
@@ -104,13 +130,10 @@ class AuthService {
           .doc(uid)
           .set(userModel.toMap());
 
-      // Desloga para o usuário entrar manualmente
       await _auth.signOut();
-
       return AuthResult(success: true, user: userModel);
 
     } catch (e) {
-      print('FIRESTORE ERROR: $e');
       try {
         await _auth.currentUser?.delete();
       } catch (_) {}

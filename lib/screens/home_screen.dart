@@ -10,8 +10,6 @@ import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
 import 'login_screen.dart';
 import 'carteira_screen.dart';
-import 'balcao_screen.dart';
-import 'mfa_screen.dart';
 import 'startup_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -189,8 +187,6 @@ class _HomeScreenState extends State<HomeScreen>
       onSelected: (value) {
         if (value == 'perfil')   _showPerfil();
         if (value == 'carteira') _abrirCarteira();
-        if (value == 'balcao')   _abrirBalcao();
-        if (value == 'mfa')      _abrirMFA();
         if (value == 'logout')   _confirmLogout();
       },
       itemBuilder: (_) => [
@@ -404,7 +400,7 @@ class _HomeScreenState extends State<HomeScreen>
         padding: const EdgeInsets.symmetric(horizontal: 20),
         scrollDirection: Axis.horizontal,
         itemCount: filtros.length,
-        separatorBuilder: (context, _) => const SizedBox(width: 8),
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (_, i) {
           final f = filtros[i];
           final selected = _filtro == f['value'];
@@ -753,6 +749,7 @@ class _HomeScreenState extends State<HomeScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Handle
             Container(
               width: 40, height: 4,
               decoration: BoxDecoration(
@@ -815,18 +812,6 @@ class _HomeScreenState extends State<HomeScreen>
   void _abrirCarteira() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const CarteiraScreen()),
-    );
-  }
-
-  void _abrirBalcao() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const BalcaoScreen()),
-    );
-  }
-
-  void _abrirMFA() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const MfaScreen()),
     );
   }
 
