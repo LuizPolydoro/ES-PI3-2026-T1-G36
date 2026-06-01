@@ -9,6 +9,7 @@ import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/gradient_button.dart';
+import 'verify_mfa_screen.dart';
 
 class CadastroScreen extends StatefulWidget {
   const CadastroScreen({super.key});
@@ -54,20 +55,33 @@ class _CadastroScreenState extends State<CadastroScreen> {
     setState(() => _isLoading = false);
 
     if (result.success) {
+      // 1. Gera e "envia" o código para o e-mail cadastrado
+      await _authService.enviarCodigoSeguranca(_emailCtrl.text.trim());
+
+      if (!mounted) return;
+
+      // 2. Notifica o usuário e vai para a tela de verificação
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(children: [
             const Icon(Icons.check_circle_outline,
                 color: AppTheme.primary, size: 18),
             const SizedBox(width: 8),
-            const Text('Conta criada com sucesso!'),
+            const Text('Conta criada! Verifique seu terminal para o código.'),
           ]),
           backgroundColor: AppTheme.surfaceLight,
-          duration: const Duration(seconds: 2),
         ),
       );
-      await Future.delayed(const Duration(seconds: 2));
-      if (mounted) Navigator.of(context).pop();
+
+      // Pequeno delay para o usuário ler a snackbar antes da transição
+      await Future.delayed(const Duration(seconds: 1));
+
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => VerifyMfaScreen(userModel: result.user),
+        ),
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

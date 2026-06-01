@@ -5,6 +5,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
+import 'email_service.dart';
 
 class AuthResult {
   final bool success;
@@ -26,19 +27,52 @@ class AuthService {
   Stream<User?> get authStateChanges => _auth.authStateChanges();
   User? get currentUser => _auth.currentUser;
 
-  // ─── GERAR E "ENVIAR" CÓDIGO ───────────────────────────────────────────────
-  Future<void> enviarCodigoSeguranca(String email) async {
-    // Gera um código de 6 dígitos aleatório
+  // ─── GERAR E "ENVIAR" CÓDIGO REAL ──────────────────────────────────────────────
+  Future<void> enviarCodigoSeguranca(String? uid) async {
+    print("--- INICIANDO PROCESSO DE ENVIO DE CÓDIGO ---");
+
+    String? emailDestino;
+
+    if (uid != null) {
+      try {
+        // Tentamos buscar na coleção 'users' (plural) que é o padrão do projeto
+        final doc = await _firestore.collection('users').doc(uid).get();
+        if (doc.exists) {
+          emailDestino = doc.data()?['email'];
+          print("✅ E-mail encontrado no Firestore (coleção users): $emailDestino");
+        } else {
+          print("⚠️ UID não encontrado na coleção 'users'. Tentando coleção 'user' (singular)...");
+          // Backup: Tentamos no singular caso você tenha mudado
+          final docSingular = await _firestore.collection('user').doc(uid).get();
+          if (docSingular.exists) {
+            emailDestino = docSingular.data()?['email'];
+            print("✅ E-mail encontrado no Firestore (coleção user): $emailDestino");
+          }
+        }
+      } catch (e) {
+        print("❌ ERRO crítico ao acessar Firestore: $e");
+      }
+    }
+
+    if (emailDestino == null || emailDestino.isEmpty) {
+      print("❌ ERRO FINAL: Não foi possível localizar o campo 'email' para o usuário $uid.");
+      return;
+    }
+
+    // 2. Gera um código de 6 dígitos aleatório
     final random = DateTime.now().millisecondsSinceEpoch.toString();
     _codigoTemporario = random.substring(random.length - 6);
 
-    // Simulação de envio de e-mail (Exibe no terminal do VS Code/Android Studio)
-    print("--------------------------------------------------");
-    print("📧 [SIMULAÇÃO DE E-MAIL]");
-    print("PARA: $email");
-    print("ASSUNTO: Seu código de acesso MesclaInvest");
-    print("MENSAGEM: Seu código de segurança é: $_codigoTemporario");
-    print("--------------------------------------------------");
+    print("🔑 CÓDIGO GERADO: $_codigoTemporario");
+
+    // 4. Envia o e-mail real usando o EmailService (SMTP)
+    final enviou = await EmailService().enviarCodigoVerificacao(emailDestino, _codigoTemporario!);
+
+    if (enviou) {
+      print("🚀 PROCESSO CONCLUÍDO: E-mail disparado com sucesso.");
+    } else {
+      print("⛔ PROCESSO FALHOU: O serviço de e-mail não conseguiu completar o envio.");
+    }
   }
 
   // ─── VERIFICAR CÓDIGO ──────────────────────────────────────────────────────

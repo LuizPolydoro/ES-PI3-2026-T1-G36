@@ -70,10 +70,10 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _isLoading = false);
 
     if (result.success) {
-      // Gera e "envia" o código para o e-mail do usuário
-      await _authService.enviarCodigoSeguranca(_emailCtrl.text);
+      // 1. Gera o código e envia para o e-mail registrado na coleção 'users' do Firestore
+      await _authService.enviarCodigoSeguranca(result.user?.uid);
 
-      // Vai para a tela de código
+      // 2. Navega para a tela de verificação
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(

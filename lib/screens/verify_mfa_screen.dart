@@ -51,11 +51,14 @@ class _VerifyMfaScreenState extends State<VerifyMfaScreen> {
   }
 
   Future<void> _reenviarCodigo() async {
-    final email = widget.userModel?.email ?? "usuário";
-    await _authService.enviarCodigoSeguranca(email);
+    // Busca o e-mail diretamente da coleção 'users' para o reenvio
+    final uid = widget.userModel?.uid;
+    await _authService.enviarCodigoSeguranca(uid);
+
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('✅ Novo código enviado para seu e-mail (veja no terminal).'),
+        content: Text('✅ Novo código enviado para o e-mail da sua conta.'),
         backgroundColor: AppTheme.surfaceLight,
       ),
     );

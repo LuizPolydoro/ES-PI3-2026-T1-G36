@@ -67,32 +67,8 @@ class AuthWrapper extends StatelessWidget {
           );
         }
 
-        if (snapshot.hasData && snapshot.data != null) {
-          return FutureBuilder<UserModel?>(
-            future: AuthService().getUserData(),
-            builder: (context, userSnap) {
-              if (userSnap.connectionState == ConnectionState.waiting) {
-                return const Scaffold(
-                  backgroundColor: AppTheme.background,
-                  body: Center(
-                    child: CircularProgressIndicator(
-                      color: AppTheme.primary,
-                      strokeWidth: 2,
-                    ),
-                  ),
-                );
-              }
-
-              if (userSnap.hasData && !AuthService.isSessionVerified) {
-                // Se o usuário está logado mas não verificou o código na sessão atual
-                return VerifyMfaScreen(userModel: userSnap.data);
-              }
-
-              return HomeScreen(userModel: userSnap.data);
-            },
-          );
-        }
-
+        // SEMPRE mostra o Login primeiro se o app for aberto do zero.
+        // A tela de código só aparecerá DEPOIS que você clicar em ENTRAR.
         return const LoginScreen();
       },
     );
