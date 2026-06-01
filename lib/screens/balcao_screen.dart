@@ -1,6 +1,6 @@
 // lib/screens/balcao_screen.dart
-// Autor: [Seu Nome Completo]
-// RA: [Seu RA]
+// Autor: João Vitor Roventini
+// RA: 22005168
 // Balcão de negociação — livro de ordens entre usuários
 
 import 'package:flutter/material.dart';

@@ -1,6 +1,6 @@
 // lib/models/oferta_model.dart
-// Autor: [Seu Nome Completo]
-// RA: [Seu RA]
+// Autor: João Vitor Roventini
+// RA: 22005168
 // Model de oferta de venda no balcão — livro de ordens
 
 import 'package:cloud_firestore/cloud_firestore.dart';

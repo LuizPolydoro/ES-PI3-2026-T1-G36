@@ -1,6 +1,6 @@
 // lib/services/oferta_service.dart
-// Autor: [Seu Nome Completo]
-// RA: [Seu RA]
+// Autor: João Vitor Roventini
+// RA: 22005168
 // Serviço do livro de ordens — criar, listar e executar ofertas
 
 import 'package:cloud_firestore/cloud_firestore.dart';
