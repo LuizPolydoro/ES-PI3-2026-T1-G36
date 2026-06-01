@@ -1,704 +1,311 @@
 # 🚀 MesclaInvest
 
-Plataforma mobile de investimentos simulados em startups universitárias desenvolvida em Flutter/Dart com integração ao Firebase.
+> Plataforma de investimentos simulados em startups universitárias — PUC-Campinas
+> Desenvolvido por **João Vitor Roventini**
+> RA: **22004168**
 
 ---
 
-# 📱 Sobre o Projeto
+# 📌 Visão Geral
 
-O **MesclaInvest** é uma aplicação mobile criada com o objetivo de simular uma plataforma moderna de investimentos em startups acadêmicas.
+O **MesclaInvest** é uma plataforma inovadora que simula um ambiente real de investimentos em startups, permitindo que usuários possam explorar, analisar e investir em projetos universitários de forma interativa, moderna e gamificada.
 
-A aplicação permite:
+O objetivo do sistema é proporcionar uma experiência imersiva semelhante a plataformas reais de venture capital, combinando conceitos de:
 
-* Cadastro e login de usuários
-* Visualização de startups cadastradas
-* Tela detalhada das startups
-* Simulação de compra e venda de tokens
-* Reprodução de vídeos demonstrativos
-* Integração em tempo real com Firebase Firestore
-* Interface moderna estilo fintech
-
----
-
-# 🛠 Tecnologias Utilizadas
-
-## Frontend
-
-* Flutter
-* Dart
-
-## Backend / Cloud
-
-* Firebase Authentication
-* Cloud Firestore
-
-## Bibliotecas
-
-* google_fonts
-* flutter_svg
-* youtube_player_flutter
-* url_launcher
-* intl
-* mask_text_input_formatter
+* 📊 Mercado financeiro
+* 🚀 Startups
+* 💰 Tokenização
+* 🔐 Segurança (2FA)
+* 🎥 Apresentações em vídeo
+* ☁️ Cloud computing com Firebase
 
 ---
 
-# 📂 Estrutura do Projeto
+# 🧠 Conceito do Projeto
 
-```plaintext
+A ideia central do MesclaInvest é transformar o processo de investimento em algo:
+
+✔ Educacional
+✔ Interativo
+✔ Visual
+✔ Simulado, porém realista
+
+Cada startup cadastrada possui:
+
+* Nome
+* Descrição
+* Setor
+* Estágio
+* Capital
+* Tokens emitidos
+* Estrutura societária
+* Vídeo de apresentação
+
+---
+
+# 🎯 Objetivos
+
+* Simular um ambiente de investimento
+* Desenvolver habilidades em Flutter + Firebase
+* Criar uma aplicação moderna com UI/UX profissional
+* Integrar múltiplos serviços (Auth, Firestore, YouTube, Email)
+* Aplicar conceitos de segurança (2FA)
+
+---
+
+# 🏗️ Arquitetura do Projeto
+
+O projeto segue uma estrutura modular baseada em:
+
+```
 lib/
-│
-├── models/
-│   └── startup_model.dart
-│
-├── screens/
-│   ├── login_screen.dart
-│   ├── register_screen.dart
-│   ├── home_screen.dart
-│   └── startup_detail_screen.dart
-│
-├── services/
-│   ├── auth_service.dart
-│   └── firestore_service.dart
-│
-├── theme/
-│   └── app_theme.dart
-│
-├── widgets/
-│   ├── gradient_button.dart
-│   └── startup_card.dart
-│
-└── main.dart
+ ├── models/
+ ├── screens/
+ ├── services/
+ ├── widgets/
+ ├── theme/
+ └── main.dart
 ```
 
 ---
 
-# 🔥 Funcionalidades
+# 📱 Funcionalidades
 
 ## 🔐 Autenticação
 
-* Cadastro com email e senha
-* Login com Firebase Authentication
-* Logout
+* Login com email e senha
+* Cadastro de usuário
+* Integração com Firebase Auth
 
 ---
 
-## 🏢 Startups
+## 🔐 Autenticação em Duas Etapas (2FA)
 
-* Listagem dinâmica via Firestore
-* Cards modernos
-* Informações financeiras
-* Setor e estágio da startup
+* Geração de código OTP
+* Envio via email
+* Validação antes do acesso ao sistema
+
+---
+
+## 🏠 Home
+
+* Listagem de startups
+* Filtros por categoria
+* Interface moderna estilo fintech
+
+---
+
+## 📊 Detalhes da Startup
+
+* Informações completas
+* Métricas financeiras
 * Estrutura societária
-* Mentores e conselho
+* Perguntas e respostas
+* Player de vídeo integrado
 
 ---
 
 ## 🎥 Vídeos
 
-* Reprodução de vídeos demonstrativos
 * Integração com YouTube
-* Abertura externa do vídeo
+* Reprodução dentro do app
+* Demonstração de cada startup
 
 ---
 
-## 💰 Tokens
+## 💰 Wallet (Carteira)
 
-* Simulação de compra
-* Simulação de venda
-* Interface inspirada em plataformas de investimento
-
----
-
-# ☁ Firebase
-
-## Serviços utilizados
-
-### Firebase Authentication
-
-Responsável pelo sistema de login e cadastro.
-
-### Cloud Firestore
-
-Responsável pelo armazenamento das startups.
+* Simulação de saldo
+* Compra de tokens
+* Venda de tokens
+* Histórico de transações
 
 ---
 
-# 📊 Estrutura da Collection Firestore
+## 💬 Sistema de Q&A
 
-Collection: `startups`
-
-Exemplo:
-
-```json
-{
-  "nome_startup": "EcoTech",
-  "descricao": "Plataforma de monitoramento ambiental",
-  "estagio": "operacao",
-  "setor": "cleantech",
-  "capital_aportado": 300000,
-  "tokens_emitidos": 100000,
-  "socios": "Ana Souza; Carlos Lima",
-  "participacao_societaria": "60%; 40%",
-  "mentores_conselho": "Mariana Prado",
-  "video_demo": "https://www.youtube.com/watch?v=f4vl_Rya3mI",
-  "status": "ativa"
-}
-```
-
----
-
-# ▶ Como Executar
-
-## 1. Clone o projeto
-
-```bash
-git clone https://github.com/seuusuario/mescla_invest.git
-```
-
----
-
-## 2. Entre na pasta
-
-```bash
-cd mescla_invest
-```
-
----
-
-## 3. Instale as dependências
-
-```bash
-flutter pub get
-```
-
----
-
-## 4. Configure o Firebase
-
-Adicione o arquivo:
-
-```plaintext
-android/app/google-services.json
-```
-
----
-
-## 5. Execute o projeto
-
-```bash
-flutter run
-```
+* Perguntas sobre startups
+* Respostas simuladas
+* Interação do usuário
 
 ---
 
 # 🎨 Design
 
-O aplicativo utiliza:
+O sistema utiliza um design inspirado em:
 
-* Dark Theme
-* Gradientes modernos
-* Interface estilo fintech
-* Componentes responsivos
-* UX focada em mobile
-
----
-
-# 📚 Objetivo Acadêmico
-
-Projeto desenvolvido para fins acadêmicos visando aplicar conceitos de:
-
-* Desenvolvimento Mobile
-* Firebase
-* Banco de Dados NoSQL
-* UI/UX
-* Arquitetura Flutter
-* Integração em tempo real
+* Fintechs modernas
+* Dark mode
+* Gradientes
+* Tipografia premium (Google Fonts)
 
 ---
 
-# 👨‍💻 Desenvolvedor
+## 🌙 Tema
 
-Projeto desenvolvido por:
-# 🚀 MesclaInvest
-
-Plataforma mobile de investimentos simulados em startups universitárias desenvolvida em Flutter/Dart com integração ao Firebase.
-
----
-
-# 📱 Sobre o Projeto
-
-O **MesclaInvest** é uma aplicação mobile criada com o objetivo de simular uma plataforma moderna de investimentos em startups acadêmicas.
-
-A aplicação permite:
-
-* Cadastro e login de usuários
-* Visualização de startups cadastradas
-* Tela detalhada das startups
-* Simulação de compra e venda de tokens
-* Reprodução de vídeos demonstrativos
-* Integração em tempo real com Firebase Firestore
-* Interface moderna estilo fintech
+* Dark Mode completo
+* Paleta personalizada
+* Componentes estilizados
 
 ---
 
-# 🛠 Tecnologias Utilizadas
+# 🧪 Tecnologias Utilizadas
 
-## Frontend
+## 📱 Frontend
 
 * Flutter
 * Dart
 
-## Backend / Cloud
+## ☁️ Backend
+
+* Firebase Auth
+* Cloud Firestore
+* Firebase Core
+
+## 🎨 UI
+
+* Google Fonts
+* Material Design 3
+
+## 🔧 Outros
+
+* YouTube Player
+* URL Launcher
+* Mask Formatter
+
+---
+
+# 🔥 Integrações
 
 * Firebase Authentication
-* Cloud Firestore
-
-## Bibliotecas
-
-* google_fonts
-* flutter_svg
-* youtube_player_flutter
-* url_launcher
-* intl
-* mask_text_input_formatter
+* Firestore Database
+* YouTube Embed
+* Email Service (2FA)
 
 ---
 
-# 📂 Estrutura do Projeto
+# 🧾 Estrutura de Dados
 
-```plaintext
-lib/
-│
-├── models/
-│   └── startup_model.dart
-│# 🚀 MesclaInvest
+## StartupModel
 
-Plataforma mobile de investimentos simulados em startups universitárias desenvolvida em Flutter/Dart com integração ao Firebase.
+Contém:
 
----
-
-# 📱 Sobre o Projeto
-
-O **MesclaInvest** é uma aplicação mobile criada com o objetivo de simular uma plataforma moderna de investimentos em startups acadêmicas.
-
-A aplicação permite:
-
-* Cadastro e login de usuários
-* Visualização de startups cadastradas
-* Tela detalhada das startups
-* Simulação de compra e venda de tokens
-* Reprodução de vídeos demonstrativos
-* Integração em tempo real com Firebase Firestore
-* Interface moderna estilo fintech
+* nomeStartup
+* descricao
+* setor
+* estagio
+* capital
+* tokens
+* videoDemo
 
 ---
 
-# 🛠 Tecnologias Utilizadas
+## Wallet
 
-## Frontend
-
-* Flutter
-* Dart
-
-## Backend / Cloud
-
-* Firebase Authentication
-* Cloud Firestore
-
-## Bibliotecas
-
-* google_fonts
-* flutter_svg
-* youtube_player_flutter
-* url_launcher
-* intl
-* mask_text_input_formatter
+* TokenPosition
+* Transacoes
+* Histórico financeiro
 
 ---
 
-# 📂 Estrutura do Projeto
+# 🔐 Segurança
 
-```plaintext
-lib/
-│
-├── models/
-│   ├── startup_model.dart
-│   ├── user_model.dart
-│   └── wallet_models.dart
-│
-├── screens/
-│   ├── login_screen.dart
-│   ├── register_screen.dart
-│   ├── home_screen.dart
-│   └── startup_detail_screen.dart
-│
-├── services/
-│   ├── auth_service.dart
-│   ├── firestore_service.dart
-│   └── wallet_service.dart
-│ 
-├── theme/
-│   └── app_theme.dart
-│
-├── widgets/
-│   ├── gradient_button.dart
-│   ├── startup_card.dart
-│   ├── startup_video_player.dart
-│   └── custom_text.dart
-│
-└── main.dart
-```
+O sistema implementa:
+
+* Autenticação segura
+* Validação de dados
+* 2FA via código
+* Proteção contra acesso indevido
 
 ---
 
-# 🔥 Funcionalidades
-
-## 🔐 Autenticação
-
-* Cadastro com email e senha
-* Login com Firebase Authentication
-* Logout
-
----
-
-## 🏢 Startups
-
-* Listagem dinâmica via Firestore
-* Cards modernos
-* Informações financeiras
-* Setor e estágio da startup
-* Estrutura societária
-* Mentores e conselho
-
----
-
-## 🎥 Vídeos
-
-* Reprodução de vídeos demonstrativos
-* Integração com YouTube
-* Abertura externa do vídeo
-
----
-
-## 💰 Tokens
-
-* Simulação de compra
-* Simulação de venda
-* Interface inspirada em plataformas de investimento
-
----
-
-# ☁ Firebase
-
-## Serviços utilizados
-
-### Firebase Authentication
-
-Responsável pelo sistema de login e cadastro.
-
-### Cloud Firestore
-
-Responsável pelo armazenamento das startups.
-
----
-
-# 📊 Estrutura da Collection Firestore
-
-Collection: `startups`
-
-Exemplo:
-
-```json
-{
-  "nome_startup": "EcoTech",
-  "descricao": "Plataforma de monitoramento ambiental",
-  "estagio": "operacao",
-  "setor": "cleantech",
-  "capital_aportado": 300000,
-  "tokens_emitidos": 100000,
-  "socios": "Ana Souza; Carlos Lima",
-  "participacao_societaria": "60%; 40%",
-  "mentores_conselho": "Mariana Prado",
-  "video_demo": "https://www.youtube.com/watch?v=f4vl_Rya3mI",
-  "status": "ativa"
-}
-```
-
----
-
-# ▶ Como Executar
-
-## 1. Clone o projeto
-
-```bash
-git clone https://github.com/seuusuario/mescla_invest.git
-```
-
----
-
-## 2. Entre na pasta
-
-```bash
-cd mescla_invest
-```
-
----
-
-## 3. Instale as dependências
+# 🚀 Como Rodar o Projeto
 
 ```bash
 flutter pub get
-```
-
----
-
-## 4. Configure o Firebase
-
-Adicione o arquivo:
-
-```plaintext
-android/app/google-services.json
-```
-
----
-
-## 5. Execute o projeto
-
-```bash
 flutter run
 ```
 
 ---
 
-# 🎨 Design
+# ⚙️ Configuração Firebase
 
-O aplicativo utiliza:
+1. Criar projeto no Firebase
+2. Adicionar app Android
+3. Baixar google-services.json
+4. Colocar em:
 
-* Dark Theme
-* Gradientes modernos
-* Interface estilo fintech
-* Componentes responsivos
-* UX focada em mobile
-
----
-
-# 📚 Objetivo Acadêmico
-
-Projeto desenvolvido para fins acadêmicos visando aplicar conceitos de:
-
-* Desenvolvimento Mobile
-* Firebase
-* Banco de Dados NoSQL
-* UI/UX
-* Arquitetura Flutter
-* Integração em tempo real
-
----
-
-# 👨‍💻 Desenvolvedor
-
-Projeto desenvolvido por:
-
-**João Vitor Roventini**
-**RA: 22005168**
-
-PUC-Campinas — Projeto Integrador
-
----
-
-# 📄 Licença
-
-Projeto acadêmico sem fins comerciais.
-
-├── screens/
-│   ├── login_screen.dart
-│   ├── register_screen.dart
-│   ├── home_screen.dart
-│   └── startup_detail_screen.dart
-│
-├── services/
-│   ├── auth_service.dart
-│   └── firestore_service.dart
-│
-├── theme/
-│   └── app_theme.dart
-│
-├── widgets/
-│   ├── gradient_button.dart
-│   └── startup_card.dart
-│
-└── main.dart
 ```
-
----
-
-# 🔥 Funcionalidades
-
-## 🔐 Autenticação
-
-* Cadastro com email e senha
-* Login com Firebase Authentication
-* Logout
-
----
-
-## 🏢 Startups
-
-* Listagem dinâmica via Firestore
-* Cards modernos
-* Informações financeiras
-* Setor e estágio da startup
-* Estrutura societária
-* Mentores e conselho
-
----
-
-## 🎥 Vídeos
-
-* Reprodução de vídeos demonstrativos
-* Integração com YouTube
-* Abertura externa do vídeo
-
----
-
-## 💰 Tokens
-
-* Simulação de compra
-* Simulação de venda
-* Interface inspirada em plataformas de investimento
-
----
-
-# ☁ Firebase
-
-## Serviços utilizados
-
-### Firebase Authentication
-
-Responsável pelo sistema de login e cadastro.
-
-### Cloud Firestore
-
-Responsável pelo armazenamento das startups.
-
----
-
-# 📊 Estrutura da Collection Firestore
-
-Collection: `startups`
-
-Exemplo:
-
-```json
-{
-  "nome_startup": "EcoTech",
-  "descricao": "Plataforma de monitoramento ambiental",
-  "estagio": "operacao",
-  "setor": "cleantech",
-  "capital_aportado": 300000,
-  "tokens_emitidos": 100000,
-  "socios": "Ana Souza; Carlos Lima",
-  "participacao_societaria": "60%; 40%",
-  "mentores_conselho": "Mariana Prado",
-  "video_demo": "https://www.youtube.com/watch?v=f4vl_Rya3mI",
-  "status": "ativa"
-}
-```
-
----
-
-# ▶ Como Executar
-
-## 1. Clone o projeto
-
-```bash
-git clone https://github.com/seuusuario/mescla_invest.git
-```
-
----
-
-## 2. Entre na pasta
-
-```bash
-cd mescla_invest
-```
-
----
-
-## 3. Instale as dependências
-
-```bash
-flutter pub get
-```
-
----
-
-## 4. Configure o Firebase
-
-Adicione o arquivo:
-
-```plaintext
 android/app/google-services.json
 ```
 
 ---
 
-## 5. Execute o projeto
+# 📦 Dependências
 
-```bash
-flutter run
+```yaml
+firebase_core
+firebase_auth
+cloud_firestore
+google_fonts
+flutter_svg
+intl
 ```
 
 ---
 
-# 🎨 Design
+# 📈 Futuras Melhorias
 
-O aplicativo utiliza:
-
-* Dark Theme
-* Gradientes modernos
-* Interface estilo fintech
-* Componentes responsivos
-* UX focada em mobile
+* 📊 Dashboard avançado
+* 📉 Gráficos financeiros
+* 🤖 IA para análise de startups
+* 🌐 Versão web
+* 💸 Sistema real de pagamentos
 
 ---
 
-# 📚 Objetivo Acadêmico
+# 🧠 Aprendizados
 
-Projeto desenvolvido para fins acadêmicos visando aplicar conceitos de:
+Este projeto envolve:
 
-* Desenvolvimento Mobile
-* Firebase
-* Banco de Dados NoSQL
-* UI/UX
-* Arquitetura Flutter
-* Integração em tempo real
+* Arquitetura de software
+* UI/UX design
+* Integração com APIs
+* Segurança digital
+* Firebase ecosystem
 
 ---
 
-# 👨‍💻 Desenvolvedor
-
-Projeto desenvolvido por:
+# 🧑‍💻 Autor
 
 **João Vitor Roventini**
-**RA: 22005168**
-
-PUC-Campinas — Projeto Integrador
+RA: 22004168
 
 ---
 
 # 📄 Licença
 
-Projeto acadêmico sem fins comerciais.
-
-**João Vitor Roventini**
-**RA: 22005168**
-
-PUC-Campinas — Projeto Integrador
+Este projeto é acadêmico e destinado exclusivamente para fins educacionais.
 
 ---
 
-# 📄 Licença
+# 🚀 Considerações Finais
 
-Projeto acadêmico sem fins comerciais.
+O MesclaInvest representa uma evolução no ensino de investimentos, trazendo uma abordagem moderna, interativa e tecnológica para o ambiente acadêmico.
+
+---
+
+# 💡 Extra
+
+Este projeto pode ser expandido para:
+
+* Startup real
+* Plataforma educacional
+* Simulador financeiro
+* Sistema de investimento coletivo
+
+---
+
+# ⭐ Obrigado por utilizar o MesclaInvest!
+
+---
