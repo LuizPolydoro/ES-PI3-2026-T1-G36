@@ -1,13 +1,14 @@
 // lib/screens/startup_detail_screen.dart
 // Autor: João Vitor Roventini
 // RA: 22005168
-// Detalhe completo — regra do investidor + perguntas privadas + balcão real
+// Detalhe completo — regra do investidor + perguntas privadas + balcão real + Player Incorporado
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import '../models/startup_model.dart';
 import '../models/wallet_model.dart';
 import '../services/wallet_service.dart';
@@ -30,15 +31,47 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
   bool _isInvestidor     = false;
   TokenPosition? _minhaPosition;
 
+  late YoutubePlayerController _videoController;
+  bool _hasVideo = false;
+
   @override
   void initState() {
     super.initState();
     _verificarInvestidor();
+
+    final videoId = YoutubePlayer.convertUrlToId(widget.startup.videoDemo);
+    _hasVideo = videoId != null;
+
+    if (_hasVideo) {
+      _videoController = YoutubePlayerController(
+        initialVideoId: videoId!,
+        flags: const YoutubePlayerFlags(
+          autoPlay: true, // Começar a reproduzir assim que o usuário entrar
+          mute: false,
+          disableDragSeek: false,
+          loop: false,
+          isLive: false,
+          forceHD: false,
+          enableCaption: true,
+        ),
+      );
+    }
+  }
+
+  @override
+  void deactivate() {
+    if (_hasVideo) {
+      _videoController.pause();
+    }
+    super.deactivate();
   }
 
   @override
   void dispose() {
     _perguntaCtrl.dispose();
+    if (_hasVideo) {
+      _videoController.dispose();
+    }
     super.dispose();
   }
 
@@ -64,23 +97,6 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
         });
       }
     } catch (_) {}
-  }
-
-  // ── Abre YouTube ─────────────────────────────────────────────────────────────
-  Future<void> _abrirYoutube() async {
-    final urlStr = widget.startup.videoDemo.trim();
-    if (urlStr.isEmpty) return;
-    final uri = Uri.parse(urlStr);
-    try {
-      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!ok) throw 'Não foi possível abrir.';
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Erro ao abrir o vídeo.'),
-        backgroundColor: AppTheme.error,
-      ));
-    }
   }
 
   // ── Envia pergunta (pública ou privada) ─────────────────────────────────────
@@ -171,6 +187,23 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
   Widget build(BuildContext context) {
     final s = widget.startup;
 
+    if (_hasVideo) {
+      return YoutubePlayerBuilder(
+        player: YoutubePlayer(
+          controller: _videoController,
+          showVideoProgressIndicator: true,
+          progressIndicatorColor: AppTheme.primary,
+        ),
+        builder: (context, player) {
+          return _buildScaffold(s, player);
+        },
+      );
+    } else {
+      return _buildScaffold(s, null);
+    }
+  }
+
+  Widget _buildScaffold(StartupModel s, Widget? videoPlayer) {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(gradient: AppTheme.backgroundGradient),
@@ -197,8 +230,12 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
                       _buildMetrics(s),
                       const SizedBox(height: 20),
 
-                      if (s.videoDemo.isNotEmpty) ...[
-                        _buildVideoButton(),
+                      // Player Incorporado
+                      if (videoPlayer != null) ...[
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: videoPlayer,
+                        ),
                         const SizedBox(height: 20),
                       ],
 
@@ -346,43 +383,6 @@ class _StartupDetailScreenState extends State<StartupDetailScreen> {
                 color: AppTheme.textMuted, fontSize: 10),
             textAlign: TextAlign.center),
       ],
-    );
-  }
-
-  // ── Botão YouTube ────────────────────────────────────────────────────────────
-  Widget _buildVideoButton() {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: const Color(0xFFCD201F).withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFCD201F).withOpacity(0.3)),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: _abrirYoutube,
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding:
-                const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.play_circle_fill_rounded,
-                    color: Color(0xFFCD201F), size: 24),
-                const SizedBox(width: 12),
-                Text('ASSISTIR PITCH NO YOUTUBE',
-                    style: GoogleFonts.spaceGrotesk(
-                        color: AppTheme.textPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5)),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 
